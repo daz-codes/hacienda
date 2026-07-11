@@ -1,0 +1,14 @@
+<% page_title "Products" %>
+
+<header class="page-heading">
+  <h1>Products</h1>
+  <% if context.current_user %><%= link "New product", "/products/new", class: "button" %><% end %>
+</header>
+
+<div class="product-grid">
+  <% products.each do |product| %>
+    <%= cache_fragment(["product-card", product.cache_key], context:, expires_in: 300) { component(:product_card, product:) } %>
+  <% end %>
+</div>
+
+<% if products.empty? %><p>No products yet.</p><% end %>

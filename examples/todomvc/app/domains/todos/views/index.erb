@@ -1,0 +1,140 @@
+<% page_title "Todos" %>
+
+<section
+  class="todoapp"
+  data-helium
+  @import="/assets/todos.js"
+  @data='<%= {
+    todos: JSON.parse(todos_json),
+    filter: filter,
+    draft: new_todo.title,
+    editingId: defined?(editing_todo) && editing_todo ? editing_todo.id : nil,
+    editTitle: defined?(editing_todo) && editing_todo ? editing_todo.title : "",
+    previewing: false,
+    showHelp: false,
+    compact: false,
+    pending: false,
+    lastAction: ""
+  }.to_json %>'
+  @keydown.document.esc="editingId = null; editTitle = ''; showHelp = false; previewing = false"
+  @keydown.document.ctrl.k.prevent="$newTodo.focus()"
+  @effect:remaining="document.title = remaining + ' left · Hacienda TodoMVC'"
+>
+  <span hidden @calculate:remaining="todos.filter(todo => !todo.completed).length"></span>
+  <span hidden @calculate:completedCount="todos.filter(todo => todo.completed).length"></span>
+  <span hidden @calculate:filteredTodos="visibleTodos(todos, filter)"></span>
+  <span hidden @calculate:allDone="todos.length > 0 && todos.every(todo => todo.completed)"></span>
+  <span hidden @calculate:canCreate="draft.trim().length > 0"></span>
+
+  <header class="header">
+    <p class="eyebrow">Hacienda + Helium</p>
+    <h1>todos</h1>
+    <p class="tagline">
+      HTML-first persistence, client-side polish, no build step.
+    </p>
+
+    <form
+      class="new-todo-form"
+      method="post"
+      action="/todos"
+      @submit="pending = true; lastAction = 'Adding ' + draft.trim()"
+    >
+      <%= csrf_field context %>
+      <input
+        class="new-todo"
+        name="title"
+        placeholder="What needs to be done?"
+        value="<%= new_todo.title %>"
+        autocomplete="off"
+        autofocus
+        @ref="newTodo"
+        @bind="draft"
+        @keydown.enter="previewing = false"
+        @keydown.esc.prevent="draft = ''; previewing = false"
+      >
+      <button :disabled="!canCreate || pending">
+        <span @text="pending ? 'Adding…' : 'Add'">Add</span>
+      </button>
+    </form>
+
+    <%= error_messages errors %>
+
+    <div class="draft-preview" @visible="canCreate && previewing">
+      Preview: <strong @text="draft"></strong>
+    </div>
+
+    <div class="toolbar">
+      <button type="button" @click="previewing = !previewing" :disabled="!canCreate">
+        <span @text="previewing ? 'Hide preview' : 'Preview draft'">Preview draft</span>
+      </button>
+      <button type="button" @click="compact = !compact">
+        <span @text="compact ? 'Comfortable view' : 'Compact view'">Compact view</span>
+      </button>
+      <button type="button" @click="showHelp = !showHelp">
+        <span @text="showHelp ? 'Hide shortcuts' : 'Shortcuts'">Shortcuts</span>
+      </button>
+    </div>
+
+    <aside class="help" @visible="showHelp">
+      <p><kbd>Ctrl</kbd> + <kbd>K</kbd> focuses the new todo box.</p>
+      <p><kbd>Esc</kbd> closes editing, preview, and this help panel.</p>
+    </aside>
+  </header>
+
+  <main class="main" @visible="todos.length > 0">
+    <section class="bulk">
+      <form method="post" action="/todos/toggle_all" @submit="pending = true; lastAction = allDone ? 'Reactivating all todos' : 'Completing all todos'">
+        <%= csrf_field context %>
+        <input type="hidden" name="_method" value="patch">
+        <button type="submit" class="toggle-all" :class="{ active: allDone }">
+          <span @text="allDone ? 'Mark all active' : 'Mark all complete'">Mark all complete</span>
+        </button>
+      </form>
+
+      <p class="status-line">
+        <strong @text="remaining"><%= remaining_count %></strong>
+        <span @text="remaining === 1 ? 'item left' : 'items left'">items left</span>
+        <span aria-hidden="true">·</span>
+        <strong @text="completedCount"><%= completed_count %></strong>
+        completed
+      </p>
+    </section>
+
+    <nav class="filters" aria-label="Todo filters">
+      <a href="/" :class="{ selected: filter === 'all' }" @click="filter = 'all'">All</a>
+      <a href="/active" :class="{ selected: filter === 'active' }" @click="filter = 'active'">Active</a>
+      <a href="/completed" :class="{ selected: filter === 'completed' }" @click="filter = 'completed'">Completed</a>
+    </nav>
+
+    <p class="empty-filter" @visible="todos.length > 0 && filteredTodos.length === 0">
+      No <span @text="filter"></span> todos.
+    </p>
+
+    <ul class="todo-list" :class="{ compact: compact }">
+      <% todos.each do |todo| %>
+        <%= partial :todo, todo: todo, context: context %>
+      <% end %>
+    </ul>
+
+    <footer class="footer">
+      <form method="post" action="/todos/completed" @visible="completedCount > 0" @submit="pending = true; lastAction = 'Clearing completed todos'">
+        <%= csrf_field context %>
+        <input type="hidden" name="_method" value="delete">
+        <button type="submit" class="clear-completed">
+          Clear completed
+        </button>
+      </form>
+
+      <p class="pending-note" @visible="pending" @text="lastAction">Working…</p>
+    </footer>
+  </main>
+
+  <section class="empty-state" @visible="todos.length === 0">
+    <h2>No todos yet.</h2>
+    <p>Add one above. Hacienda will persist it; Helium will keep the interface lively.</p>
+  </section>
+</section>
+
+<p class="info">
+  Built with Hacienda, Sequel, ERB, Rack, and a deliberately large amount of Helium.
+</p>

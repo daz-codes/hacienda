@@ -1,0 +1,14 @@
+{
+  "name": "hacienda-framework-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:client": "vitest run",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.2",
+    "jsdom": "^27.0.1",
+    "vitest": "^3.2.4"
+  }
+}

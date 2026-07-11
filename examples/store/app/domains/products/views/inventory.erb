@@ -1,0 +1,7 @@
+<p class="inventory <%= product.in_stock? ? "in-stock" : "out-of-stock" %>">
+  <% if product.in_stock? %>
+    <strong><%= product.inventory_count %></strong> in stock
+  <% else %>
+    Out of stock
+  <% end %>
+</p>

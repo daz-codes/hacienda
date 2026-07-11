@@ -1,0 +1,22 @@
+<%= error_messages errors %>
+
+<%= form_start action, method:, context:, enctype: "multipart/form-data" %>
+
+  <label>
+    Title
+    <input name="title" value="<%= post.title %>" required>
+  </label>
+
+  <label>
+    Body
+    <textarea name="body" required><%= post.body %></textarea>
+  </label>
+
+  <label>
+    Cover image
+    <input type="file" name="cover" accept="image/jpeg,image/png,image/webp,image/avif">
+  </label>
+  <% if post.cover? %><p>Current cover: <%= post.cover_filename %></p><% end %>
+
+  <button type="submit">Save</button>
+<%= form_end %>

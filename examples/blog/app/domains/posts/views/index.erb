@@ -1,0 +1,12 @@
+<% page_title "Posts · Field Notes" %>
+
+<header>
+  <h1>Posts</h1>
+  <% if context.current_user %><%= link "New post", "/posts/new" %><% end %>
+</header>
+
+<% posts.each do |post| %>
+  <%= cache_fragment(["post-card", post.id, post.updated_at.to_f], context:, expires_in: 300) { component(:post_card, post:) } %>
+<% end %>
+
+<% if posts.empty? %><p>No published posts yet.</p><% end %>

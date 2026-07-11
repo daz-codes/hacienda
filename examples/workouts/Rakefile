@@ -1,0 +1,21 @@
+# frozen_string_literal: true
+
+APP_ROOT = File.expand_path(__dir__) unless defined?(APP_ROOT)
+require "hacienda"
+require_relative "config/database"
+require "sequel/extensions/migration"
+
+namespace :db do
+  desc "Run database migrations"
+  task :migrate do
+    Sequel::Migrator.run(DB, File.join(APP_ROOT, "db", "migrations"))
+    puts "Database migrations complete."
+  end
+
+  desc "Create a sample generated workout"
+  task seed: :migrate do
+    require_relative "config/application"
+    load File.join(APP_ROOT, "db", "seeds.rb")
+    puts "Database seed complete."
+  end
+end

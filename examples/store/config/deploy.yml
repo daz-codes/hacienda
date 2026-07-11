@@ -1,0 +1,58 @@
+# Replace the example host, domain, registry username, and image before setup.
+service: store
+image: your-registry-user/store
+minimum_version: 2.0.0
+
+servers:
+  web:
+    - 192.0.2.1
+  job:
+    hosts:
+      - 192.0.2.1
+    cmd: bundle exec hac jobs:work
+
+proxy:
+  ssl: true
+  host: app.example.com
+  app_port: 5151
+  forward_headers: true
+  healthcheck:
+    path: /up
+    interval: 3
+    timeout: 3
+
+registry:
+  username: your-registry-user
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  clear:
+    HACIENDA_ENV: production
+    RACK_ENV: production
+    DATABASE_URL: sqlite:///app/db/production.sqlite3
+    HACIENDA_CACHE_STORE: memory
+    HACIENDA_STORAGE_SERVICE: disk
+    HACIENDA_STORAGE_ROOT: /app/storage
+    HACIENDA_APP_URL: https://app.example.com
+  secret:
+    - HACIENDA_MASTER_KEY
+    - HACIENDA_SESSION_SECRET
+    # - HACIENDA_SESSION_SECRET_OLD
+    # - SMTP_USERNAME
+    # - SMTP_PASSWORD
+
+# This named volume makes the default SQLite database survive deployments.
+# Use this template on one server only; use an external database for multiple hosts.
+volumes:
+  - "store_db:/app/db"
+  - "store_storage:/app/storage"
+
+builder:
+  arch: amd64
+
+aliases:
+  console: app exec --primary -i --reuse "bundle exec hac console"
+  migrate: app exec --primary --reuse "bundle exec hac db:migrate"
+  seed: app exec --primary --reuse "bundle exec hac db:seed"
+  logs: app logs

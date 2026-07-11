@@ -1,0 +1,100 @@
+<% editing = !workout.id.nil? %>
+<form
+  method="post"
+  action="<%= editing ? "/workouts/#{workout.id}" : "/workouts" %>"
+  data-helium
+  @import="/assets/workouts.js"
+  @data='<%= {
+    activity: workout.activity,
+    notes: workout.training_notes,
+    intensity: workout.intensity,
+    duration: workout.duration,
+    constraintsOpen: !workout.training_notes.to_s.empty?,
+    submitting: false
+  }.to_json %>'
+  @submit="submitting = true"
+>
+  <%= csrf_field context %>
+  <%= method_field :patch if editing %>
+  <span hidden @calculate:durationLabel="formatDuration(duration)"></span>
+  <span hidden @calculate:ready="activity.trim().length > 0"></span>
+
+  <%= error_messages errors %>
+
+  <div class="field">
+    <label for="workout_activity">Activity</label>
+    <input
+      id="workout_activity"
+      name="workout[activity]"
+      value="<%= workout.activity %>"
+      required
+      autofocus
+      placeholder="e.g. Trail run, Hyrox, swimming"
+      @bind="activity"
+    >
+  </div>
+
+  <button type="button" class="disclosure" @click="constraintsOpen = !constraintsOpen">
+    <span @text="constraintsOpen ? 'Hide training constraints' : 'Add training constraints'">Add training constraints</span>
+  </button>
+
+  <div class="field constraints" @visible="constraintsOpen">
+    <label for="workout_training_notes">Training constraints <span>(optional)</span></label>
+    <textarea
+      id="workout_training_notes"
+      name="workout[training_notes]"
+      rows="6"
+      placeholder="Goals, equipment, injuries, excluded movements, required distances…"
+      @bind="notes"
+    ><%= workout.training_notes %></textarea>
+    <p class="field-hint"><span @text="notes.length"><%= workout.training_notes.to_s.length %></span> characters</p>
+  </div>
+
+  <div class="field-row">
+    <div class="field">
+      <label for="workout_intensity">Intensity</label>
+      <select id="workout_intensity" name="workout[intensity]" required @bind="intensity">
+        <% Workouts::Workout::INTENSITIES.each do |intensity| %>
+          <option value="<%= intensity %>" <%= "selected" if workout.intensity == intensity %>><%= intensity.capitalize %></option>
+        <% end %>
+      </select>
+    </div>
+
+    <div class="field duration-field">
+      <div class="range-label">
+        <label for="workout_duration">Duration</label>
+        <output for="workout_duration" @text="durationLabel"><%= workout.duration %> min</output>
+      </div>
+      <input
+        id="workout_duration"
+        type="range"
+        name="workout[duration]"
+        value="<%= workout.duration %>"
+        min="20"
+        max="120"
+        step="5"
+        required
+        @bind="duration"
+      >
+      <div class="range-limits" aria-hidden="true"><span>20 min</span><span>2 hours</span></div>
+    </div>
+  </div>
+
+  <aside class="request-preview">
+    <p class="eyebrow">Live brief</p>
+    <strong @text="activity || 'Your activity'">Your activity</strong>
+    <span>·</span>
+    <span @text="intensity">high</span>
+    <span>·</span>
+    <span @text="durationLabel"><%= workout.duration %> min</span>
+  </aside>
+
+  <div class="form-actions">
+    <button class="button" :disabled="!ready || submitting">
+      <span @text="submitting ? 'Generating…' : '<%= editing ? "Regenerate workout" : "Generate workout" %>'"><%= editing ? "Regenerate workout" : "Generate workout" %></span>
+    </button>
+    <a href="<%= editing ? "/workouts/#{workout.id}" : "/workouts" %>" class="text-link">Cancel</a>
+  </div>
+
+  <p class="generation-note" @visible="submitting">Generating three complete variants can take a moment.</p>
+</form>

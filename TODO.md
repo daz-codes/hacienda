@@ -1,0 +1,337 @@
+# Hacienda TODO
+
+This is the short-term roadmap for turning Hacienda from a working experiment
+into a small, usable Ruby web framework.
+
+## Framework readiness
+
+- [x] Domain-oriented app structure
+- [x] Rack application runtime
+- [x] Domain route files
+- [x] Module actions with `respond(context, params)`
+- [x] ERB rendering with layouts, partials, and components
+- [x] Sequel repositories
+- [x] Optional thin persistence mapper
+  - [x] Declarative attributes and dirty tracking without ActiveRecord
+  - [x] Partial updates and no-op unchanged saves
+  - [x] Custom Sequel datasets with reusable row mapping
+  - [x] Explicit load/dump coercions for JSON and other stored values
+  - [x] Opt-in optimistic locking with loud stale-write failures
+  - [x] Application-owned database used consistently by repositories
+- [x] `hac`/`fac new`
+- [x] `hac`/`fac generate domain`
+- [x] `hac`/`fac generate rest`
+- [x] `hac`/`fac generate action`
+- [x] `hac`/`fac generate auth`
+- [x] `hac`/`fac generate migration`
+- [x] `hac`/`fac start` on port 5151
+- [x] `hac`/`fac console`
+- [x] `hac`/`fac routes`
+- [x] `hac`/`fac db:migrate`, `db:rollback`, and `db:seed`
+- [x] Generated Rack::Test integration helper and smoke test
+- [x] Local Helium asset included by default
+- [x] Asset helpers for stylesheets and JavaScript
+- [x] Flash messages
+- [x] Example blog application
+
+## Next framework features
+
+- [x] Development code reloading
+  - [x] Generated apps enable reload in development
+  - [x] Route files reload without server restart
+  - [x] Action modules reload without warnings
+  - [x] Zeitwerk manages collapsed action directories without manual constant removal
+  - [x] Route ignore/action collapse globs discover newly added domains
+  - [x] Reloads replace nested and cross-domain references as one generation
+- [x] Mail support
+  - [x] SMTP delivery adapter
+  - [x] Development adapter that writes mail to `tmp/mail`
+  - [x] Test adapter with in-memory deliveries
+  - [x] Small explicit mail API, without ActionMailer-style inheritance
+- [x] Background jobs
+  - [x] Inline adapter
+  - [x] Async in-process adapter
+  - [x] Test adapter
+  - [x] `deliver_later` for mail
+  - [x] Durable database adapter with leases, retries, and failed-job visibility
+  - [x] `hac`/`fac jobs:work`, `jobs:failed`, and explicit retry commands
+- [ ] Sequel-native production queue
+  - [x] Define parity as Solid Queue-level reliability and operational ergonomics without Active Job or Active Record, not API compatibility or imitation of Rails internals
+  - [x] Phase 1 — transaction-safe job contract
+    - [x] Define the common adapter contract and optional capabilities such as durable, scheduled, bulk, and externally managed
+    - [x] Add `transaction.enqueue(job, ...)` with correct outer transaction, nested savepoint, rollback, and after-commit behavior
+    - [x] Add a transactional job-outbox table for adapters that cannot share the Sequel transaction
+    - [x] Add an outbox relay with leases, retries, failure visibility, and idempotent hand-off identifiers
+    - [x] Keep `Hacienda.enqueue` for work that does not depend on an uncommitted database change
+    - [x] Add contract validation and tests exercised by the built-in and external-adapter paths
+    - [x] Document at-least-once delivery, idempotent job design, and transaction boundaries
+  - [x] Phase 2 — delayed jobs and priorities
+    - [x] Add `Hacienda.enqueue_in(duration, job, ...)`
+    - [x] Add `Hacienda.enqueue_at(time, job, ...)`
+    - [x] Add numeric job priority with a documented default and ordering rule
+    - [x] Order eligible work by queue selection, priority, scheduled time, and ID deterministically
+    - [x] Add deterministic clock-based tests for delayed availability, retries, and ordering
+    - [x] Show scheduled work through `hac jobs:scheduled`
+  - [x] Phase 3 — worker throughput and queue selection
+    - [x] Add atomic `claim_many(limit:)` while retaining the existing single-claim operation
+    - [x] Add configurable worker thread count and batch size
+    - [x] Support an ordered list of queues and an all-queues mode, not only one queue per worker
+    - [x] Keep claiming fair enough that a continuously busy queue cannot starve every lower-volume queue
+    - [x] Track worker identity, process identity, start time, last heartbeat, and current workload
+    - [x] Preserve graceful `TERM`/`INT` draining across a worker pool
+    - [x] Add multi-process contention and duplicate-execution tests
+  - [x] Phase 4 — long-running job safety
+    - [x] Renew leases while jobs are running rather than relying only on a fixed worst-case lease duration
+    - [x] Add configurable execution timeouts with an explicit cooperative or process-based termination policy
+    - [x] Recover abandoned work when a worker heartbeat expires
+    - [x] Distinguish retryable failures, terminal failures, lease loss, cancellation, and timeout in stored state and logs
+    - [x] Add crash and `SIGKILL` fault-injection tests around claim, perform, complete, retry, and shutdown boundaries
+  - [x] Phase 5 — operational visibility
+    - [x] Retain configurable completed and discarded-job history instead of always deleting successful rows
+    - [x] Add retention and pruning commands for completed, discarded, and failed work
+    - [x] Add `hac jobs:status` for queue depth, oldest-job age, scheduled count, running workers, throughput, and failures
+    - [x] Add CLI inspection for pending, running, scheduled, completed, discarded, and failed jobs
+    - [x] Emit structured lifecycle notifications for enqueue, start, finish, retry, timeout, discard, and lease loss
+    - [x] Provide hooks for application logging and external metrics without requiring a monitoring dependency
+    - [x] Add a small web dashboard for inspecting queue health, workers, recurring tasks, failed jobs, and paused queues
+  - [x] Phase 6 — recurring work
+    - [x] Define a small explicit `config/recurring.yml` format
+    - [x] Choose and document either an optional maintained cron parser or a deliberately narrower built-in schedule syntax
+    - [x] Add a scheduler process with graceful shutdown and health reporting
+    - [x] Prevent duplicate runs across multiple schedulers with a unique task-and-time execution record
+    - [x] Support enabling, disabling, and manually triggering a recurring task from the CLI
+    - [x] Add `hac jobs:recurring` to validate and inspect the loaded schedule
+  - [x] Phase 7 — concurrency and uniqueness controls
+    - [x] Add opt-in uniqueness keys with configurable conflict behavior and expiry
+    - [x] Add opt-in execution concurrency limits keyed by job arguments or an explicit key
+    - [x] Release concurrency controls safely after success, failure, timeout, cancellation, and worker death
+    - [x] Make blocked work visible and explain why each job is blocked
+    - [x] Add contention tests for uniqueness and concurrency controls across worker processes
+  - [x] Phase 8 — bulk and lifecycle operations
+    - [x] Add transactional `enqueue_all` with one serialization and insert path
+    - [x] Add pause and resume operations by queue
+    - [x] Add cancel, retry, discard, and reschedule operations with explicit job states
+    - [x] Make lifecycle operations safe when a job is concurrently claimed or running
+    - [x] Add optional callbacks for bulk completion without introducing workflow or batch-object abstractions into core
+  - [x] Phase 9 — worker supervisor and dashboard story
+    - [x] Define the recommended process topology for web, worker, scheduler, and outbox/event relay processes
+    - [x] Provide generated Procfile-style process definitions for local development and simple deployment
+    - [x] Document Kamal/supervisor examples for running workers and schedulers alongside the web process
+    - [x] Add worker and scheduler health checks based on heartbeats, lease age, and oldest pending job age
+    - [x] Add a lightweight authenticated dashboard mount for queue depth, workers, recurring tasks, failed jobs, paused queues, and retention/pruning state
+    - [x] Keep dashboard operations read-only until explicit retry/discard/pause/resume authorization policy is designed
+    - [x] Document that the dashboard is an operational tool, not a required runtime dependency
+  - [ ] Phase 10 — optional Sidekiq escape hatch
+    - [ ] Publish `hacienda-sidekiq` separately so Sidekiq and Redis remain outside core dependencies
+    - [ ] Preserve Hacienda module jobs through one generic Sidekiq worker and the existing serializer contract
+    - [ ] Route transaction-dependent Sidekiq work through the transactional job outbox
+    - [ ] Map queues, retries, delayed execution, and supported lifecycle options explicitly
+    - [ ] Provide a plain-Ruby Sidekiq boot command, configuration guide, and adapter contract tests
+    - [ ] Do not provide a first-party Solid Queue adapter while it requires Active Job, Active Record, and Railties
+  - [ ] Phase 11 — production qualification
+    - [x] Add `hac`/`fac jobs:benchmark` for sustained enqueue, claim, completion, retry, cleanup, and SQLite WAL qualification
+    - [x] Sample database latency while workers contend for the same SQLite database
+    - [ ] Test the same queue contract and failure suite with PostgreSQL through Sequel
+    - [x] Document recommended worker, thread, batch, polling, WAL, busy-timeout, and lease settings
+    - [x] Define queue-depth, latency, write-contention, and availability thresholds that indicate the application has outgrown SQLite
+    - [x] Publish a parity matrix showing supported Solid Queue capabilities and intentional Hacienda omissions
+- [x] Flash messages
+- [x] Simple validation/errors convention
+- [x] Migration generator
+- [x] Environment config for development, test, and production
+- [x] Logging
+- [x] Friendly development error pages
+- [x] Production error pages
+- [x] Params helpers for nested input and whitelisting
+- [x] HTML helpers for links, buttons, and forms
+- [x] Explicit database transactions and domain events
+  - [x] Application-owned Sequel transaction API
+  - [x] Typed plain-Ruby events and explicit subscribers
+  - [x] After-commit dispatch with rollback and savepoint handling
+  - [x] Thread-safe subscriber registry and development reload support
+  - [x] Event recorder and subscriber failure reporting
+  - [x] Optional transactional database outbox
+  - [x] Crash recovery and at-least-once event delivery through the worker
+- [x] Automatic HTML escaping in ERB
+  - [x] Escape values rendered with `<%= value %>` by default
+  - [x] Mark framework helpers, layouts, partials, and components as safe HTML
+  - [x] Provide an explicit `raw(value)` escape hatch
+  - [x] Keep `h(value)` for explicit escaping and compatibility
+  - [x] Add XSS regression tests for values, attributes, partials, and components
+- [x] Caching
+  - [x] Small `fetch`/`read`/`write`/`delete` API
+  - [x] Bounded, thread-safe in-memory development and test store
+  - [x] Null store and explicit pluggable production-store contract
+  - [x] Fragment caching helper for partial/component HTML
+  - [x] Conditional HTTP caching with `ETag`, `Last-Modified`, and `Cache-Control`
+  - [ ] Optional single-flight/dogpile protection for expensive cache misses
+  - [ ] Optional negative caching when repeated nil-returning work matters
+- [x] File uploads and storage
+  - [x] Normalize Rack multipart uploads with size and media-type validation
+  - [x] Disk, memory, and null services behind a pluggable service contract
+  - [x] Secure generated keys, checksums, metadata, replacement, and deletion APIs
+  - [x] Streaming local-file middleware with traversal and active-content protections
+  - [x] Generated environment configuration and a complete blog cover-image example
+  - [x] Atomic create-if-absent semantics for explicit storage keys
+  - [ ] Periodic orphan-file reconciliation/sweep job
+- [x] Default-on Hacienda Navigation enhancement
+  - [x] Intercept same-origin GET links and morph one content target with Idiomorph
+  - [x] Intent prefetching with a bounded, expiring cache
+  - [x] Preserve browser history, title, focus, scroll, and permanent elements
+  - [x] Loading state and documented lifecycle events
+  - [x] Global, link, element, and response opt-outs with full-load fallbacks
+  - [x] Helium MutationObserver integration without global teardown
+  - [x] jsdom integration tests and Playwright browser smoke tests
+  - [ ] Consider native form interception only after redirect, validation, upload, and history semantics are designed
+  - [x] Document how Hacienda Navigation composes with Helium's existing SSE support for live updates without adding a client router
+- [x] JSON request bodies
+  - [x] Parse `application/json` and vendor `+json` objects into `Params`
+  - [x] Return `400 Bad Request` for malformed or non-object JSON
+  - [x] Preserve form params, cache parsed request data, and rewind the body
+- [ ] i18n integration
+  - [ ] Integrate the standard Ruby `i18n` gem without adding a Hacienda-specific translation DSL
+  - [ ] Add explicit default-locale, available-locale, fallback, and translation-path configuration
+  - [ ] Resolve locale per request through a configurable context loader or application hook
+  - [ ] Provide `t`/`translate` and locale-aware formatting helpers in views and actions
+  - [ ] Support interpolation and pluralization through the underlying i18n library
+  - [ ] Allow validation and framework error messages to use application translations
+  - [ ] Generate `config/locales/en.yml` with a small, understandable starter structure
+  - [ ] Test locale isolation between requests, fallback behavior, and missing translations
+- [x] Deployment documentation and templates
+  - [x] Production multi-stage Dockerfile in generated applications
+  - [x] Kamal 2 configuration, secrets, aliases, HTTPS proxy, and health check
+  - [x] Persistent single-server SQLite volume with multi-server guidance
+  - [x] Migration, rollback, backup, and production limitations documented
+  - [x] Production logs written to stdout
+- [x] Production-grade single-host SQLite
+  - [x] Enable WAL mode and a busy timeout in generated production applications
+  - [x] Run durable jobs and the transactional outbox from the same local database
+  - [x] Keep the default cache and rate limiter in-process for one web process
+  - [x] Keep uploads on a persistent local volume by default
+  - [x] Add `hac`/`fac db:check` for SQLite version, WAL mode, busy-timeout, foreign keys, and unsafe synced-storage paths
+  - [x] Add `hac`/`fac db:checkpoint` for explicit WAL maintenance
+  - [x] Provide and snapshot-test a Litestream backup-and-restore template
+  - [x] Document and assert a separate backup strategy for locally stored uploads
+  - [x] Define write-contention and availability thresholds that indicate an application has outgrown SQLite
+  - [x] Benchmark concurrent web requests, jobs, outbox delivery, and WAL checkpoint behavior
+  - [x] Add request/job logging that highlights sustained `SQLITE_BUSY` contention
+- [ ] Optional scaling escape hatches
+  - [ ] Keep PostgreSQL compatibility tested through Sequel without making it the generated default
+  - [ ] Document a deliberate SQLite-to-PostgreSQL migration path
+  - [ ] Provide an optional S3-compatible storage service when local disk is insufficient
+  - [ ] Add shared cache and distributed rate-limit contracts only when real multi-host applications require them
+  - [ ] Add a multi-host Kamal template only after the shared-service story is complete
+- [ ] Scalable route lookup
+  - [ ] Benchmark representative applications with dozens, hundreds, and thousands of routes
+  - [ ] Bucket compiled routes by HTTP verb and static path prefix to avoid scanning unrelated routes
+  - [ ] Preserve specificity ordering, declaration-order tie-breaking, parameters, and HEAD behavior
+  - [ ] Consider a trie only if benchmarks show prefix buckets are insufficient
+- [ ] Framework maintainability before wider contribution
+  - [ ] Split `lib/hacienda/cli.rb` into command-focused files
+  - [ ] Split `lib/hacienda/jobs.rb` into adapter, worker, scheduler, serializer, controls, and instrumentation files
+  - [ ] Split `lib/hacienda/generator.rb` into scaffold, app templates, domain/resource templates, auth templates, and deployment templates
+- [ ] Generated app upgrade story
+  - [ ] Publish documented generated-file diffs per release
+  - [ ] Consider `hac update` for safe template refreshes with explicit review
+- [x] Generator snapshot tests for new apps, REST resources, and authentication
+
+## Authentication roadmap
+
+- [x] Session-based sign up
+- [x] Session-based login
+- [x] Logout
+- [x] Password hashing
+- [x] Route guards
+- [x] Request-level `context.current_user`
+- [x] Email verification
+- [x] Password reset
+- [x] Magic link login
+- [ ] Optional OmniAuth generator
+- [ ] Optional passkey generator
+- [ ] Optional two-factor authentication generator
+
+## Security
+
+- [x] CSRF middleware
+- [x] CSRF form helper
+- [x] Generated apps include CSRF protection by default
+- [x] Session middleware in generated apps
+- [x] Session secret configurable via `HACIENDA_SESSION_SECRET`
+- [x] Production requires a non-development session secret
+- [x] Encrypted credentials
+  - [x] `config/credentials.yml.enc`
+  - [x] `config/master.key`
+  - [x] `HACIENDA_MASTER_KEY` support for production
+  - [x] `hac`/`fac credentials:edit`
+  - [x] `hac`/`fac credentials:show`
+  - [x] Runtime helper for reading credentials
+- [x] Secure cookie defaults for production
+- [x] SameSite cookie defaults
+- [x] Security headers middleware
+- [x] Content Security Policy helper/middleware
+- [x] Signed tokens for email verification, magic-link login, and password reset
+- [x] Rate limiting hooks for login, magic-link login, sign-up, and password reset
+- [x] HEAD requests match GET routes
+- [x] Request logging that avoids sensitive params
+- [x] Canonical application URL and host authorization
+  - [x] Generate explicit `HACIENDA_APP_URL` / credentials-backed app URL configuration
+  - [x] Use the canonical URL, not `request.base_url`, when generating email verification, password reset, and unsubscribe URLs
+  - [x] Provide `Hacienda.app_url` for magic-link and signed URL generators
+  - [x] Add host allowlist middleware for generated production applications
+  - [x] Document proxy requirements for trusted `Host` and `X-Forwarded-*` headers
+- [x] Session lifecycle hardening
+  - [x] Add `expire_after` to generated cookie sessions
+  - [x] Wire Rack session old-secret rotation so deployments can rotate `HACIENDA_SESSION_SECRET` without logging everyone out immediately
+  - [x] Document cookie session replay trade-offs after logout
+  - [x] Add optional Sequel-backed session store for revocation and stolen-session invalidation
+- [x] Add production HSTS support to security headers
+  - [x] Send `Strict-Transport-Security` only when production TLS termination is expected
+  - [x] Document proxy/TLS assumptions before enabling preload-style settings
+- [x] Harden generated secret files
+  - [x] Write `config/master.key` with `0600` permissions on create and rotate
+  - [x] Document `0600` permissions for `.kamal/secrets` and generated deployment secrets
+- [x] Harden redirects
+  - [x] Strip CR/LF from `Location` headers
+  - [x] Reject cross-origin redirects by default
+  - [x] Provide explicit `allow_other_host: true` for intentional external redirects
+- [x] Tighten CSP without sacrificing HTML-first ergonomics
+  - [x] Add per-request CSP nonce generation
+  - [x] Add `csp_nonce` helper for views
+  - [x] Let generated apps remove `style-src 'unsafe-inline'` when using nonce-based inline styles
+- [x] Bound in-process rate limiter memory growth
+  - [x] Add a max-key limit or eviction policy per limiter store
+  - [x] Keep the existing pluggable store contract for larger deployments
+- [x] Harden dashboard local-development gate
+  - [x] Use direct `REMOTE_ADDR` for local-only dashboard access, not `request.ip`
+  - [x] Document proxy assumptions for any dashboard exposure
+- [x] Document conscious security trade-offs
+  - [x] Rate limiter `request.ip` depends on the proxy overwriting spoofable forwarding headers
+  - [x] CSRF tokens are unmasked; note BREACH-style compression trade-offs
+- [x] Custom error pages and handlers
+  - [x] Let apps provide branded 404 and 500 pages without replacing the whole application class
+  - [x] Preserve development error details while allowing production error templates
+
+## Reassessed priorities
+
+1. i18n integration.
+2. PostgreSQL queue contract qualification through Sequel.
+3. Periodic orphan-upload reconciliation.
+4. Framework maintainability split before wider contribution.
+5. Generated app upgrade story.
+6. Benchmark and index route lookup before introducing a trie.
+7. Optional Sidekiq, PostgreSQL, S3, and multi-host escape hatches when applications demonstrably need them.
+
+## Things to avoid for now
+
+These are design constraints, not implementation tasks:
+
+- Rails-style controllers
+- ActiveRecord dependency
+- ActionMailer-style inheritance
+- A Redis-scale distributed queue inside the framework; Hacienda develops the SQL-backed queue deeply and keeps Sidekiq optional
+- Solid Queue as a dependency or first-party adapter while it requires Active Job, Active Record, and Railties; Hacienda builds the equivalent Sequel-native capabilities it actually needs
+- Redis, PostgreSQL, or object storage as mandatory production infrastructure
+- Mandatory event bus, container, or unit-of-work in every app — domain events and aggregates ship as opt-in, plain-Ruby conventions you reach for per domain, never core furniture
+- Turbo as a required dependency
+- Node.js as a required dependency
+- Complex asset pipeline

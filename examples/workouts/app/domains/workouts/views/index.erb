@@ -1,0 +1,32 @@
+<% page_title "Workouts" %>
+
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Training log</p>
+    <h1>Your workouts</h1>
+    <p class="lede">Generate structured training sessions and keep the useful ones.</p>
+  </div>
+  <a href="/workouts/new" class="button">Generate a workout</a>
+</section>
+
+<% if workouts.any? %>
+  <div class="workout-grid">
+    <% workouts.each do |workout| %>
+      <% plan = workout.generated_plan || {} %>
+      <a href="/workouts/<%= workout.id %>" class="workout-card">
+        <div class="workout-card-header">
+          <h2><%= plan["title"] || workout.activity %></h2>
+          <span class="intensity intensity-<%= workout.intensity %>"><%= workout.intensity.capitalize %></span>
+        </div>
+        <p><%= (plan["summary"] || workout.training_notes || workout.activity).to_s[0, 140] %></p>
+        <span class="duration"><%= workout.duration %> minutes · <%= workout.scale_level.capitalize %></span>
+      </a>
+    <% end %>
+  </div>
+<% else %>
+  <section class="empty-state">
+    <h2>No workouts yet</h2>
+    <p>Describe what you want to train and generate your first session.</p>
+    <a href="/workouts/new" class="button">Generate your first workout</a>
+  </section>
+<% end %>

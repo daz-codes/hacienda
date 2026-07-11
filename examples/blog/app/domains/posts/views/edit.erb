@@ -1,0 +1,8 @@
+<% page_title "Edit #{post.title} · Field Notes" %>
+
+<h1>Edit post</h1>
+<%= partial :form,
+      post:,
+      errors:,
+      action: "/posts/#{post.id}",
+      method: "patch" %>

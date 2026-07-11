@@ -1,0 +1,32 @@
+<%= error_messages errors %>
+
+<%= form_start action, method:, context:, enctype: "multipart/form-data" %>
+
+  <label>
+    Name
+    <input name="name" value="<%= product.name %>" required autofocus>
+  </label>
+
+  <label>
+    Description
+    <textarea name="description" rows="8"><%= product.description %></textarea>
+  </label>
+
+  <fieldset @data="{ inventory: <%= product.inventory_count.to_i %> }">
+    <label>
+      Inventory count
+      <input type="number" name="inventory_count" min="0" value="<%= product.inventory_count %>" @bind="inventory" required>
+    </label>
+    <small><span @text="inventory"><%= product.inventory_count.to_i %></span> items available</small>
+  </fieldset>
+
+  <label>
+    Featured image
+    <input type="file" name="featured_image" accept="image/jpeg,image/png,image/webp,image/avif">
+  </label>
+  <% if product.featured_image? %>
+    <small>Current image: <%= product.featured_image_filename %></small>
+  <% end %>
+
+  <button type="submit">Save</button>
+<%= form_end %>

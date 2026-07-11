@@ -1,0 +1,99 @@
+<section id="program" class="workout-detail" data-helium>
+  <%= error_messages workout.errors %>
+  <% plan = workout.generated_plan || {} %>
+
+  <div class="workout-card-header">
+    <div>
+      <p class="eyebrow">Workout</p>
+      <h1><%= plan["title"] || workout.activity %></h1>
+      <% if plan["summary"] %><p class="lede"><%= plan["summary"] %></p><% end %>
+    </div>
+    <span class="intensity intensity-<%= workout.intensity %>"><%= workout.intensity.capitalize %></span>
+  </div>
+
+  <dl class="workout-meta">
+    <div><dt>Duration</dt><dd><%= workout.duration %> minutes</dd></div>
+    <div><dt>Level</dt><dd><%= workout.scale_level.capitalize %></dd></div>
+    <div><dt>Generated</dt><dd><%= workout.created_at&.strftime("%d %b %Y") %></dd></div>
+  </dl>
+
+  <% if plan.any? %>
+    <div class="generated-plan">
+      <section class="plan-section"><h2>Goal</h2><p><%= plan["goal"] %></p></section>
+
+      <% block = plan["warm_up"] %>
+      <% if block %>
+        <section class="plan-section supporting-block warm-up">
+          <div class="supporting-block-header">
+            <h2>Warm-up</h2>
+            <span><%= block["duration_minutes"] %> min</span>
+          </div>
+          <% unless block["instructions"].to_s.empty? %><p><strong><%= block["instructions"] %></strong></p><% end %>
+          <ul class="supporting-block-items">
+            <% Array(block["items"]).each do |item| %><li><%= item %></li><% end %>
+          </ul>
+        </section>
+      <% end %>
+
+      <% main_set = plan["main_set"] %>
+      <% if main_set %>
+        <section class="plan-section main-set">
+          <div class="main-set-header">
+            <div><h2>Main set</h2><% if main_set["format"] %><strong><%= main_set["format"] %></strong><% end %></div>
+            <span><%= main_set["total_minutes"] %> minutes</span>
+          </div>
+          <ol class="main-set-sections">
+            <% Array(main_set["sections"]).each do |section| %>
+              <li>
+                <div class="main-set-section-heading"><strong><%= section["name"] %></strong><span><%= section["duration_minutes"] %> min</span></div>
+                <% unless section["instructions"].to_s.empty? %><p><%= section["instructions"] %></p><% end %>
+                <ul class="main-set-work"><% Array(section["work"]).each do |item| %><li><%= item %></li><% end %></ul>
+                <% if Array(section["notes"]).any? %>
+                  <ul class="main-set-notes"><% section["notes"].each do |note| %><li><%= note %></li><% end %></ul>
+                <% end %>
+              </li>
+            <% end %>
+          </ol>
+        </section>
+      <% end %>
+
+      <% block = plan["cool_down"] %>
+      <% if block %>
+        <section class="plan-section supporting-block cool-down">
+          <div class="supporting-block-header">
+            <h2>Cool-down</h2>
+            <span><%= block["duration_minutes"] %> min</span>
+          </div>
+          <% unless block["instructions"].to_s.empty? %><p><strong><%= block["instructions"] %></strong></p><% end %>
+          <ul class="supporting-block-items">
+            <% Array(block["items"]).each do |item| %><li><%= item %></li><% end %>
+          </ul>
+        </section>
+      <% end %>
+
+      <% {"Coach's cue" => "coach_cue", "Common mistake" => "common_mistake", "Why it works" => "why_it_works", "Scaling" => "scaling_summary"}.each do |heading, key| %>
+        <% next if plan[key].to_s.empty? %>
+        <section class="plan-section"><h2><%= heading %></h2><p><%= plan[key] %></p></section>
+      <% end %>
+    </div>
+  <% end %>
+
+  <% if workout.variants_preloaded? %>
+    <section class="scaling-controls">
+      <div>
+        <p class="eyebrow">Adjust difficulty</p>
+        <p>Switch variants without another model request.</p>
+      </div>
+      <div class="scaling-actions">
+        <form method="post" action="/workouts/<%= workout.id %>/scale-down" @patch="/workouts/<%= workout.id %>/scale-down" @target="#program:replace" @loading="<section id='program' class='workout-detail loading-card'>Scaling workout…</section>">
+          <%= csrf_field context %><%= method_field :patch %>
+          <button class="button button-secondary" <%= "disabled" unless workout.can_scale_down? %>>Scale down</button>
+        </form>
+        <form method="post" action="/workouts/<%= workout.id %>/scale-up" @patch="/workouts/<%= workout.id %>/scale-up" @target="#program:replace" @loading="<section id='program' class='workout-detail loading-card'>Scaling workout…</section>">
+          <%= csrf_field context %><%= method_field :patch %>
+          <button class="button button-secondary" <%= "disabled" unless workout.can_scale_up? %>>Scale up</button>
+        </form>
+      </div>
+    </section>
+  <% end %>
+</section>

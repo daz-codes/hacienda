@@ -1,0 +1,197 @@
+/* ==========================================================================
+   Solanum — botanical industrial theme
+   Plain Old Ruby Objects, the humble nightshade. White ground, violet
+   nightshade accents, green foliage headings, a pollen-yellow flower centre.
+   NOTE: layouts using this expect the Fraunces / Oswald / Archivo web fonts
+   and a logo at /assets/solanum.svg with a `.brand-logo` element.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  --violet: #7c3aed;        /* nightshade petal */
+  --violet-deep: #5b21b6;   /* darker violet — links / hover */
+  --aubergine: #1f1530;     /* near-black purple */
+  --leaf: #2f7a4b;          /* nightshade foliage green — headings */
+  --pollen: #f3c20d;        /* flower-centre yellow accent */
+  --paper: #ffffff;         /* white background */
+  --paper-2: #f4f5f7;       /* faint panel surface (lifts off white) */
+  --line: #e3e4ea;          /* hairline borders */
+  --text: #211b2b;
+  --text-dim: #5d586a;
+  --danger: #b5301b;
+
+  font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--text);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  line-height: 1.55;
+  background: var(--paper);
+}
+
+h1, h2, h3, .brand {
+  font-family: Fraunces, "Iowan Old Style", Georgia, serif;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: -.01em;
+  line-height: 1.04;
+  margin: 0 0 .6rem;
+  color: var(--leaf);
+}
+h1 { font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 700; }
+h2 { font-size: 1.6rem; }
+
+a { color: var(--violet-deep); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a:hover { color: var(--aubergine); }
+
+.eyebrow {
+  font-family: Oswald, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .35em;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--violet-deep);
+  margin: 0 0 .4rem;
+}
+
+/* ---- Forms & buttons: sharp-cornered, industrial ----------------------- */
+
+button, input, textarea, select { font: inherit; }
+
+button, .button {
+  display: inline-block;
+  border: 0;
+  border-radius: 0;
+  padding: .7rem 1.3rem;
+  background: var(--violet);
+  color: #fff;
+  font-family: Oswald, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .12s ease, transform .12s ease;
+}
+button:hover, .button:hover { background: var(--violet-deep); transform: translateY(-1px); }
+button.danger, .danger { background: var(--danger); color: #fff; }
+button.danger:hover, .danger:hover { background: #cf3a22; }
+
+label { display: grid; gap: .4rem; margin: 1rem 0; font-family: Oswald, sans-serif; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: .85rem; color: var(--aubergine); }
+input, textarea, select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: .75rem;
+  background: #fff;
+  color: var(--text);
+}
+input:focus, textarea:focus, select:focus { outline: 2px solid var(--violet); outline-offset: 1px; border-color: var(--violet); }
+fieldset { margin: 1rem 0; padding: 0; border: 0; }
+
+/* ---- Header ------------------------------------------------------------ */
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem max(1.25rem, calc((100vw - 68rem) / 2));
+  /* muted gray with a transparent black mask to darken it slightly */
+  background: linear-gradient(rgba(31, 21, 48, .12), rgba(31, 21, 48, .12)), var(--paper);
+  color: var(--aubergine);
+  border-top: 5px solid var(--violet);
+}
+.site-header a { color: var(--aubergine); text-decoration: none; }
+.site-header nav, .actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.site-header nav a {
+  font-family: Oswald, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  font-weight: 500;
+  font-size: .92rem;
+}
+.site-header nav a:hover { color: var(--violet-deep); }
+.site-header nav a[aria-current="page"] { box-shadow: inset 0 -3px 0 var(--violet); }
+.site-header form, .actions form { margin: 0; }
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  font-size: 1.6rem;
+  text-decoration: none;
+  color: var(--aubergine);
+}
+.brand-logo { width: 3.5rem; height: 3.5rem; display: block; flex: none; }
+
+/* ---- Page shell -------------------------------------------------------- */
+
+#hacienda-page { width: min(68rem, calc(100% - 2.5rem)); margin: 2.5rem auto; outline: none; }
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+
+/* ---- Products ---------------------------------------------------------- */
+
+.product-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1.25rem; }
+.product-card, .subscribe-panel, .feature {
+  position: relative;
+  padding: 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--paper-2);
+  overflow: hidden;
+}
+/* violet bar down the left edge of product cards */
+.product-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--violet);
+}
+.product-card h2 { font-size: 1.3rem; }
+.product-card a { color: var(--aubergine); text-decoration: none; }
+.product-card a:hover { color: var(--violet-deep); }
+
+.product { max-width: 48rem; }
+.product-image { display: block; width: 100%; max-height: 30rem; object-fit: cover; border-radius: 0; border: 1px solid var(--line); }
+.product-description { white-space: pre-wrap; color: var(--text-dim); }
+
+.inventory {
+  width: fit-content;
+  border-radius: 0;
+  padding: .35rem .85rem;
+  font-family: Oswald, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  font-size: .8rem;
+}
+.in-stock { background: var(--violet); color: #fff; }
+.out-of-stock { background: var(--aubergine); color: #fff; }
+
+.actions { margin-top: 2rem; }
+
+/* ---- Flash / errors ---------------------------------------------------- */
+
+.flash-messages { margin-bottom: 1rem; }
+.flash, .errors {
+  padding: .85rem 1rem;
+  border-radius: 0;
+  background: var(--paper-2);
+  border-left: 6px solid var(--violet);
+  color: var(--text);
+}
+.flash { background: #fff; border: 3px solid var(--violet); }
+.errors { border-left-color: var(--danger); }
+
+[hidden] { display: none !important; }
+
+@media (max-width: 42rem) {
+  .site-header, .site-header nav { align-items: flex-start; flex-direction: column; }
+}

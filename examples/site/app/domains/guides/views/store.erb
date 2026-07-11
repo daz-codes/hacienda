@@ -1,0 +1,20 @@
+<% page_title "Build Haçienda Supply" %>
+
+<header class="guide-hero store-guide-hero">
+  <p class="eyebrow">The complete guide</p>
+  <h1>Build Haçienda Supply.</h1>
+  <p class="lede">A realistic store with inventory, authentication, uploads,
+    email, caching, events, durable jobs, tests and deployment.</p>
+</header>
+
+<div class="tutorial-layout full-guide-layout">
+  <aside class="tutorial-toc full-guide-toc">
+    <strong>Contents</strong>
+    <% document.fetch(:headings).each do |heading| %>
+      <a href="#<%= heading.fetch(:id) %>"><%= heading.fetch(:title) %></a>
+    <% end %>
+  </aside>
+  <article class="guide-content rendered-markdown">
+    <%= document.fetch(:html) %>
+  </article>
+</div>

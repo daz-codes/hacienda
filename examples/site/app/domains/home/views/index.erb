@@ -1,0 +1,77 @@
+<% page_title "Plain old Ruby objects, organised into domains" %>
+
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">FAC 51 / Domain-oriented Ruby</p>
+    <p class="hero-kicker">You’ll never see the Haçienda. It doesn’t exist.</p>
+    <h1>The Haçienda<br><span>must be built.</span></h1>
+    <p class="lede">Haçienda stays small enough to disappear into your
+      application. You do not see a tower of framework machinery; you see plain
+      old Ruby objects organised into domains, plus the tools needed to build
+      the app you actually want.</p>
+    <div class="hero-actions">
+      <%= link "Build a blog in 10 minutes", "/guides/blog", class: "button button-primary" %>
+      <%= link "Browse the Helium cookbook", "/guides/helium", class: "button button-secondary" %>
+      <%= link "Read the full store guide", "/guides/store", class: "button button-secondary" %>
+    </div>
+  </div>
+  <aside class="terminal" aria-label="Hacienda quick start commands">
+    <div class="terminal-bar"><span></span><span></span><span></span><b>~/projects</b></div>
+    <pre><code><span class="prompt">$</span> gem install hacienda
+<span class="prompt">$</span> hac new field-notes
+<span class="prompt">$</span> cd field-notes
+<span class="prompt">$</span> bundle exec hac start
+
+<span class="success">Hacienda is open on :5151</span></code></pre>
+  </aside>
+</section>
+
+<section class="manifesto" id="why">
+  <header class="section-heading">
+    <p class="eyebrow">Why Haçienda</p>
+    <h2>Small enough to understand.<br>Structured enough to keep.</h2>
+  </header>
+  <div class="feature-grid">
+    <%= component :feature, number: "01", title: "Explicit by default",
+      detail: "Routes are ordinary code. Actions are modules. Repositories use Sequel directly. Generated code belongs to you." %>
+    <%= component :feature, number: "02", title: "Organised by domain",
+      detail: "Plain old Ruby objects live where their behaviour belongs. Posts own their routes, behaviour, persistence, views and events." %>
+    <%= component :feature, number: "03", title: "HTML first",
+      detail: "Return a Hash and Haçienda renders ERB. Idiomorph navigation makes pages feel immediate; Helium enhances only what moves." %>
+    <%= component :feature, number: "04", title: "Ruby-shaped behaviour",
+      detail: "Write Posts.publish(post), not PublishPost.call. Use modules, composition and plain objects instead of framework inheritance." %>
+  </div>
+</section>
+
+<section class="code-story">
+  <div class="code-story-copy">
+    <p class="eyebrow">One request. No mystery.</p>
+    <h2>The HTTP boundary stays thin.</h2>
+    <p>An action receives request context and permitted parameters. Domain
+      behaviour remains named for what the application actually does.</p>
+    <button type="button" class="text-button" @click="showFiles = !showFiles">
+      Toggle the domain filesystem
+    </button>
+    <pre class="file-tree" @visible="showFiles"><code><%= structure_example %></code></pre>
+  </div>
+  <pre class="code-panel"><code><%= request_example %></code></pre>
+</section>
+
+<section class="principles">
+  <p class="eyebrow">The useful middle</p>
+  <h2>More structure than a micro app.<br>Less machinery than a monolith.</h2>
+  <div class="principle-list">
+    <p><strong>Rack</strong><span>The web boundary remains standard Ruby.</span></p>
+    <p><strong>Sequel</strong><span>Explicit datasets and repositories, never Active Record.</span></p>
+    <p><strong>ERB + Helium</strong><span>Server HTML with progressive enhancement and no Node requirement.</span></p>
+    <p><strong>Cookbook patterns</strong><span>Filtering, inline edits, modals, previews and pending states without a client-side app.</span></p>
+    <p><strong>Batteries that matter</strong><span>Auth, mail, jobs, events, caching, uploads and security without a service-object empire.</span></p>
+  </div>
+</section>
+
+<section class="final-cta">
+  <span class="catalogue-number">FAC 51 / START HERE</span>
+  <h2>Make the first page.</h2>
+  <p>The ten-minute guide starts with a blank terminal and ends with a working CRUD blog.</p>
+  <%= link "Build the blog", "/guides/blog", class: "button button-primary" %>
+</section>

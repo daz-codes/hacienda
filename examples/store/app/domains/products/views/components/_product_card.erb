@@ -1,0 +1,6 @@
+<article class="product-card">
+  <h2>
+    <%= link product.name, path("/products/:id", id: product.id) %>
+  </h2>
+  <p><%= product.in_stock? ? "#{product.inventory_count} in stock" : "Out of stock" %></p>
+</article>

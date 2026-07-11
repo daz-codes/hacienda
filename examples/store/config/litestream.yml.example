@@ -1,0 +1,17 @@
+# Example Litestream configuration for single-host SQLite backups.
+# Install Litestream separately and provide destination credentials through
+# the environment or your host supervisor.
+#
+# Restore before starting the app:
+#   litestream restore -if-replica-exists -o db/production.sqlite3 db/production.sqlite3
+#
+# Run beside the app:
+#   litestream replicate -config config/litestream.yml
+dbs:
+  - path: /app/db/production.sqlite3
+    replicas:
+      - type: s3
+        bucket: CHANGE_ME
+        path: store/production.sqlite3
+        endpoint: https://s3.amazonaws.com
+        region: CHANGE_ME

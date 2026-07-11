@@ -1,0 +1,96 @@
+<% page_title "Build a blog in 10 minutes" %>
+
+<header class="guide-hero">
+  <p class="eyebrow">Quick start / approximately 10 minutes</p>
+  <h1>Build a working blog.</h1>
+  <p class="lede">Start with the Haçienda gem. Finish with explicit routes,
+    validated posts, Sequel persistence, ERB views and a server on port 5151.</p>
+</header>
+
+<div class="tutorial-layout">
+  <aside class="tutorial-toc">
+    <strong>On this page</strong>
+    <a href="#install">01 Install</a>
+    <a href="#generate">02 Generate</a>
+    <a href="#routes">03 Read the routes</a>
+    <a href="#action">04 Follow a request</a>
+    <a href="#object">05 Meet the object</a>
+    <a href="#view">06 See the HTML</a>
+    <a href="#run">07 Run it</a>
+  </aside>
+
+  <article class="tutorial guide-content">
+    <section id="install">
+      <span class="step-number">01 / 01:30</span>
+      <h2>Install Haçienda and create the app</h2>
+      <p>This guide assumes the published <code>hacienda</code> gem. The
+        <code>fac</code> command is an alias for <code>hac</code>.</p>
+      <pre><code><%= samples.fetch(:install) %></code></pre>
+      <p><code>hac new</code> writes a complete Rack application: configuration,
+        layout, local Helium assets, development reloading and integration tests.</p>
+    </section>
+
+    <section id="generate">
+      <span class="step-number">02 / 02:30</span>
+      <h2>Generate the posts domain</h2>
+      <pre><code><%= samples.fetch(:generate) %></code></pre>
+      <p>The REST generator creates code, not a hidden resource declaration. You
+        now have a post object, repository, migration, one <code>actions.rb</code>
+        file with seven action modules, and five ERB views.</p>
+      <div class="callout"><strong>Look around.</strong> Everything needed for posts
+        lives under <code>app/domains/posts</code>.</div>
+    </section>
+
+    <section id="routes">
+      <span class="step-number">03 / 03:30</span>
+      <h2>The routes say exactly what exists</h2>
+      <pre><code><%= samples.fetch(:routes) %></code></pre>
+      <p>Each symbol maps directly to a module in
+        <code>app/domains/posts/actions.rb</code>. If an action grows, move it to
+        <code>app/domains/posts/actions/show.rb</code>; the route name stays the same.
+        There is no controller or implicit <code>resources</code> expansion to remember.</p>
+    </section>
+
+    <section id="action">
+      <span class="step-number">04 / 05:00</span>
+      <h2>Follow the index request</h2>
+      <pre><code><%= samples.fetch(:action) %></code></pre>
+      <p>A Hash response renders <code>views/index.erb</code> automatically and
+        exposes its values as escaped locals. Redirects, JSON and custom responses
+        remain explicit.</p>
+    </section>
+
+    <section id="object">
+      <span class="step-number">05 / 06:30</span>
+      <h2>The post is still a Ruby object</h2>
+      <pre><code><%= samples.fetch(:post) %></code></pre>
+      <p>There is no framework base class. The optional modules provide attributes,
+        dirty tracking and validation while persistence stays in
+        <code>Posts::Repository</code>.</p>
+    </section>
+
+    <section id="view">
+      <span class="step-number">06 / 08:00</span>
+      <h2>Views are ordinary ERB</h2>
+      <pre><code><%= samples.fetch(:view) %></code></pre>
+      <p>Haçienda escapes output automatically. Components are partials, and the
+        default navigation layer morphs complete HTML pages without creating a
+        client-side router.</p>
+    </section>
+
+    <section id="run">
+      <span class="step-number">07 / 10:00</span>
+      <h2>Open the doors</h2>
+      <pre><code><%= samples.fetch(:run) %></code></pre>
+      <p>Create, edit and delete a post. You now have a working server-rendered
+        application with validation, flash messages, CSRF protection, tests and
+        development reloading.</p>
+      <div class="next-guide">
+        <p class="eyebrow">Go further</p>
+        <h3>Build the complete store</h3>
+        <p>Add authentication, uploads, caching, mail, events, background jobs and deployment.</p>
+        <%= link "Continue to the full guide", "/guides/store", class: "button button-primary" %>
+      </div>
+    </section>
+  </article>
+</div>

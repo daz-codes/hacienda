@@ -1,0 +1,6 @@
+<article>
+  <h2>
+    <%= link post.title, path("/posts/:id", id: post.id) %>
+  </h2>
+  <p><%= post.body[0, 140] %></p>
+</article>

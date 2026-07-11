@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= document_title %></title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Oswald:wght@400;500;600;700&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <%= stylesheet_link "application.css" %>
+    <%= hacienda_navigation context %>
+    <%= javascript_include "helium-csp.js", module: true %>
+    <%= javascript_include "store.js", defer: true %>
+  </head>
+  <body>
+    <header class="site-header">
+      <a href="/" class="brand">Hacienda Store</a>
+      <nav>
+        <%= link "Products", "/products", data_hacienda_active_prefix: "/products" %>
+        <% if context.current_user %>
+          <%= link "New product", "/products/new" %>
+          <%= button_to "Log out", "/logout", method: "delete", context: %>
+        <% else %>
+          <%= link "Log in", "/login" %>
+          <%= link "Sign up", "/signup" %>
+        <% end %>
+      </nav>
+    </header>
+    <%= navigation_page content, context: context %>
+  </body>
+</html>

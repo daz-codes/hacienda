@@ -1,0 +1,57 @@
+<li
+  class="todo-item <%= "completed" if todo.completed? %>"
+  data-id="<%= todo.id %>"
+  @visible="filter === 'all' || (filter === 'active' && !todoCompleted(<%= todo.id %>, todos)) || (filter === 'completed' && todoCompleted(<%= todo.id %>, todos))"
+  :class="{ completed: todoCompleted(<%= todo.id %>, todos), editing: editingId === <%= todo.id %> }"
+>
+  <div class="view" @visible="editingId !== <%= todo.id %>">
+    <form method="post" action="/todos/<%= todo.id %>" @submit="toggleLocal(todos, <%= todo.id %>); pending = true; lastAction = 'Toggling todo'">
+      <%= csrf_field context %>
+      <input type="hidden" name="_method" value="patch">
+      <button
+        type="submit"
+        class="toggle"
+        aria-label="Toggle <%= todo.title %>"
+        :aria-pressed="todoCompleted(<%= todo.id %>, todos)"
+      >
+        <span @text="todoCompleted(<%= todo.id %>, todos) ? '✓' : ''"><%= todo.completed? ? "✓" : "" %></span>
+      </button>
+    </form>
+
+    <button
+      type="button"
+      class="title"
+      @dblclick="editingId = <%= todo.id %>; editTitle = todoTitle(<%= todo.id %>, todos); setTimeout(() => $edit_<%= todo.id %>.focus(), 0)"
+      @click="lastAction = 'Selected ' + todoTitle(<%= todo.id %>, todos)"
+      @text="todoTitle(<%= todo.id %>, todos)"
+    ><%= todo.title %></button>
+
+    <form method="post" action="/todos/<%= todo.id %>" @submit="removeLocal(todos, <%= todo.id %>); pending = true; lastAction = 'Deleting todo'">
+      <%= csrf_field context %>
+      <input type="hidden" name="_method" value="delete">
+      <button type="submit" class="destroy" aria-label="Delete <%= todo.title %>">×</button>
+    </form>
+  </div>
+
+  <form
+    class="edit-form"
+    method="post"
+    action="/todos/<%= todo.id %>/title"
+    @visible="editingId === <%= todo.id %>"
+    @submit="renameLocal(todos, <%= todo.id %>, editTitle); editingId = null; pending = true; lastAction = 'Renaming todo'"
+  >
+    <%= csrf_field context %>
+    <input type="hidden" name="_method" value="patch">
+    <input
+      name="title"
+      value="<%= todo.title %>"
+      class="edit"
+      autocomplete="off"
+      @ref="edit_<%= todo.id %>"
+      @bind="editTitle"
+      @keydown.enter="editingId = null"
+      @keydown.esc.prevent="editingId = null; editTitle = ''"
+    >
+    <button type="submit">Save</button>
+  </form>
+</li>

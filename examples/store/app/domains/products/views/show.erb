@@ -1,0 +1,35 @@
+<% page_title product.name %>
+
+<article class="product">
+  <% if product.featured_image? %>
+    <img src="<%= context.storage.url(product.featured_image_key) %>" alt="" class="product-image">
+  <% end %>
+
+  <%= cache_fragment(["product-details", product.cache_key], context:, expires_in: 300) { partial(:details, product:) } %>
+
+  <%= partial :inventory, product: %>
+
+  <% unless product.in_stock? %>
+    <section class="subscribe-panel">
+      <h2>Email me when available</h2>
+      <%= error_messages errors %>
+      <%= form_start path("/products/:id/subscribers", id: product.id), context: %>
+        <label>Email <input type="email" name="email" value="<%= subscriber.email %>" required></label>
+        <button type="submit">Notify me</button>
+      <%= form_end %>
+    </section>
+  <% end %>
+
+  <nav class="actions">
+    <%= link "Back", "/products" %>
+    <% if can_manage %>
+      <%= link "Edit", path("/products/:id/edit", id: product.id) %>
+      <%= button_to "Delete",
+        path("/products/:id", id: product.id),
+        method: "delete",
+        context:,
+        form: {data_confirm: "Delete #{product.name}?"},
+        button: {class: "danger"} %>
+    <% end %>
+  </nav>
+</article>

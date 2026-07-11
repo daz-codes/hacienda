@@ -1,0 +1,224 @@
+<% page_title "Helium cookbook" %>
+
+<header class="guide-hero helium-guide-hero">
+  <p class="eyebrow">HTML-first interactivity</p>
+  <h1>Helium cookbook.</h1>
+  <p class="lede">Six small patterns that cover the JavaScript most server-rendered
+    apps reach for React, Stimulus, Alpine or Turbo Frames to solve. Hacienda
+    keeps the server authoritative; Helium makes the current page feel alive.</p>
+</header>
+
+<div class="tutorial-layout full-guide-layout">
+  <aside class="tutorial-toc full-guide-toc">
+    <strong>Patterns</strong>
+    <a href="#filter">01 Product filter</a>
+    <a href="#inline-edit">02 Inline edit</a>
+    <a href="#modal">03 Modal form</a>
+    <a href="#dependent-fields">04 Dependent fields</a>
+    <a href="#preview">05 Live preview</a>
+    <a href="#pending">06 Pending state</a>
+  </aside>
+
+  <article
+    class="guide-content helium-cookbook"
+    @import="/assets/time_ago.js"
+    @init="start_time_ago_clock($data)"
+    @data='{
+      "timestamp": 0,
+      "productQuery": "",
+      "stockOnly": false,
+      "editingTitle": false,
+      "recordTitle": "Blue Monday",
+      "draftTitle": "Blue Monday",
+      "commentOpen": false,
+      "commentBody": "",
+      "product_kind": "physical",
+      "physical_quantity": 10,
+      "digital_downloads": 3,
+      "previewBody": "",
+      "messageText": ""
+    }'
+  >
+    <section id="filter" class="cookbook-pattern">
+      <span class="step-number">01 / React-style filtering</span>
+      <h2>Filter a product table</h2>
+      <p>This is the classic “Thinking in React” product filter. The rows are
+        ordinary server-rendered HTML; Helium only owns the local query and checkbox state.</p>
+
+      <div class="demo-card">
+        <div class="demo-controls">
+          <input type="search" placeholder="Search records…" @bind="productQuery">
+          <label class="check-row">
+            <input type="checkbox" @bind="stockOnly">
+            Only show in-stock items
+          </label>
+        </div>
+
+        <div class="product-table">
+          <article @visible="'factory records tote'.includes(productQuery.toLowerCase()) && (!stockOnly || true)">
+            <strong>Factory Records Tote</strong><span>Accessories</span><b>In stock</b>
+          </article>
+          <article @visible="'unknown pleasures print'.includes(productQuery.toLowerCase()) && (!stockOnly || false)">
+            <strong>Unknown Pleasures Print</strong><span>Prints</span><b>Sold out</b>
+          </article>
+          <article @visible="'hac51 enamel pin'.includes(productQuery.toLowerCase()) && (!stockOnly || true)">
+            <strong>HAC51 Enamel Pin</strong><span>Accessories</span><b>In stock</b>
+          </article>
+        </div>
+      </div>
+
+      <pre><code><%= samples.fetch(:filter) %></code></pre>
+    </section>
+
+    <section id="inline-edit" class="cookbook-pattern">
+      <span class="step-number">02 / Hotwire-style editing</span>
+      <h2>Inline edit without a frame</h2>
+      <p>Use Helium to swap read/edit states. The save button can still submit a
+        normal PATCH form to Hacienda.</p>
+
+      <div class="demo-card">
+        <div class="inline-edit-demo" @visible="!editingTitle">
+          <h3 id="record-title" @text="recordTitle">Blue Monday</h3>
+          <button type="button" @click="editingTitle = true">Edit title</button>
+        </div>
+
+        <form
+          class="inline-edit-demo"
+          method="post"
+          action="/records/1"
+          @ref="titleForm"
+          @visible="editingTitle"
+        >
+          <input name="title" @bind="draftTitle">
+          <button
+            @post.prevent="/guides/helium/title-preview"
+            @params="new FormData($titleForm)"
+            @target="#record-title:replace"
+            @click="editingTitle = false"
+          >Save title</button>
+          <button type="button" @click="editingTitle = false">Cancel</button>
+        </form>
+      </div>
+
+      <pre><code><%= samples.fetch(:inline_edit) %></code></pre>
+    </section>
+
+    <section id="modal" class="cookbook-pattern">
+      <span class="step-number">03 / Modal form</span>
+      <h2>Open a modal, submit HTML</h2>
+      <p>Helium handles the open/close state. The form remains a plain browser
+        submission with CSRF and server validation.</p>
+
+      <div class="demo-card">
+        <button type="button" @click="commentOpen = true">New comment</button>
+        <dialog class="demo-dialog" :open="commentOpen">
+          <form
+            method="post"
+            action="/comments"
+            @ref="commentForm"
+          >
+            <h3>New comment</h3>
+            <textarea name="body" placeholder="Say something useful" @bind="commentBody"></textarea>
+            <div class="button-row">
+              <button type="button" @click="commentOpen = false">Cancel</button>
+              <button
+                @post.prevent="/guides/helium/comment-preview"
+                @params="new FormData($commentForm)"
+                @target="#comment-result:append"
+                @click="commentOpen = false, commentBody = ''"
+              >Post comment</button>
+            </div>
+          </form>
+        </dialog>
+        <div id="comment-result"></div>
+      </div>
+
+      <pre><code><%= samples.fetch(:modal) %></code></pre>
+    </section>
+
+    <section id="dependent-fields" class="cookbook-pattern">
+      <span class="step-number">04 / Dependent fields</span>
+      <h2>Show the fields that matter</h2>
+      <p>Common admin-form behaviour does not need a component tree. Bind the
+        field that drives the branch and let the server receive normal params.</p>
+
+      <div class="demo-card">
+        <label>
+          Product type
+          <select name="kind" @change="product_kind = $event.target.value">
+            <option value="physical">Physical</option>
+            <option value="digital">Digital</option>
+          </select>
+        </label>
+
+        <label @visible="product_kind === 'physical'">
+          Stock count
+          <input type="number" name="quantity" value="10" @input="physical_quantity = $event.target.value">
+        </label>
+
+        <label @visible="product_kind === 'digital'">
+          Download limit
+          <input type="number" name="download_limit" value="3" @input="digital_downloads = $event.target.value">
+        </label>
+
+        <p class="demo-summary">
+          <strong @visible="product_kind === 'physical'" @text="physical_quantity + ' physical copies'">10 physical copies</strong>
+          <strong @visible="product_kind === 'digital'" @text="digital_downloads + ' downloads per purchase'">3 downloads per purchase</strong>
+        </p>
+      </div>
+
+      <pre><code><%= samples.fetch(:dependent_fields) %></code></pre>
+    </section>
+
+    <section id="preview" class="cookbook-pattern">
+      <span class="step-number">05 / Live preview</span>
+      <h2>Preview text as it is typed</h2>
+      <p>This is the kind of small enhancement that often becomes a React island.
+        With Helium it stays in the ERB that owns the form.</p>
+
+      <div class="demo-card">
+        <textarea name="body" placeholder="Write a post excerpt…" @bind="previewBody"></textarea>
+        <aside class="preview-box" @visible="previewBody.length > 0">
+          <span class="eyebrow">Preview</span>
+          <p @text="previewBody"></p>
+        </aside>
+      </div>
+
+      <pre><code><%= samples.fetch(:preview) %></code></pre>
+    </section>
+
+    <section id="pending" class="cookbook-pattern">
+      <span class="step-number">06 / Ajax form feedback</span>
+      <h2>Post a form, append an HTML fragment</h2>
+      <p>Helium sends ordinary form data to a Hacienda action. The server returns
+        HTML and Helium appends it without navigating or replacing earlier messages.</p>
+
+      <div class="demo-card">
+        <form
+          method="post"
+          action="/messages"
+          @ref="messageForm"
+        >
+          <input name="message" placeholder="Message" required @bind="messageText">
+          <button
+            @post.prevent="/guides/helium/post-preview"
+            @params="new FormData($messageForm)"
+            @target="#post-result:append"
+          >Post message</button>
+          <div id="post-result"></div>
+        </form>
+      </div>
+
+      <pre><code><%= samples.fetch(:pending) %></code></pre>
+
+      <div class="next-guide">
+        <p class="eyebrow">The boundary</p>
+        <h3>Helium is not the router.</h3>
+        <p>Hacienda Navigation handles fast GET page transitions. Native forms
+          send writes to the server. Helium covers the local behaviour that makes
+          each page feel responsive.</p>
+        <%= link "See the TodoMVC example", "https://github.com/hacienda-rb/hacienda/tree/main/examples/todomvc", class: "button button-primary" %>
+      </div>
+    </section>
+  </article>
+</div>

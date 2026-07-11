@@ -1,0 +1,9 @@
+<% page_title "Sign up · Field Notes" %>
+
+<h1>Sign up</h1>
+<%= error_messages errors %>
+<%= form_start "/signup", context: %>
+  <label>Email <input type="email" name="email" value="<%= email %>" required></label>
+  <label>Password <input type="password" name="password" minlength="12" required></label>
+  <button type="submit">Sign up</button>
+<%= form_end %>

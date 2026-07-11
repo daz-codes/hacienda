@@ -1,0 +1,10 @@
+<% page_title "Log in with email" %>
+
+<h1>Log in with email</h1>
+<%= error_messages errors %>
+<% unless token.to_s.empty? %>
+  <%= form_start "/magic-login/confirm", context: %>
+    <input type="hidden" name="token" value="<%= token %>">
+    <button type="submit">Log in</button>
+  <%= form_end %>
+<% end %>

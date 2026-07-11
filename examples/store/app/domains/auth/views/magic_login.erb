@@ -1,0 +1,7 @@
+<% page_title "Email login link" %>
+
+<h1>Email login link</h1>
+<%= form_start "/magic-login", context: %>
+  <label>Email <input type="email" name="email" value="<%= email %>" required></label>
+  <button type="submit">Send login link</button>
+<%= form_end %>

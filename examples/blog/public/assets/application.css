@@ -1,0 +1,142 @@
+:root {
+  color-scheme: light dark;
+  font-family: ui-serif, Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+  line-height: 1.65;
+}
+
+body > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+nav form {
+  display: inline;
+}
+
+main {
+  padding: 4rem 0;
+}
+
+.flash-messages {
+  margin: 2rem 0 0;
+}
+
+.flash {
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 0.4rem;
+}
+
+h1 {
+  margin: 0.25em 0;
+  font-size: clamp(2.75rem, 8vw, 5.5rem);
+  line-height: 1;
+}
+
+h2 {
+  line-height: 1.2;
+}
+
+a {
+  color: #d36f3d;
+}
+
+.brand {
+  color: inherit;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.eyebrow {
+  color: #d36f3d;
+  font: 700 0.8rem system-ui;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.post-card {
+  padding: 1.5rem 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.post-body {
+  white-space: pre-wrap;
+}
+
+.post-cover {
+  display: block;
+  width: 100%;
+  max-height: 28rem;
+  object-fit: cover;
+  margin: 1.5rem 0;
+}
+
+.actions {
+  margin-top: 2rem;
+}
+
+.comments {
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.comment {
+  padding: 1rem 0;
+  border-top: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.comment p {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  padding: 0.5rem 0.8rem;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  display: block;
+  width: 100%;
+  padding: 0.65rem;
+  margin: 0.35rem 0 1rem;
+}
+
+textarea {
+  min-height: 16rem;
+}
+
+.comments textarea {
+  min-height: 8rem;
+}

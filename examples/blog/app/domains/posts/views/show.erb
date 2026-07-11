@@ -1,0 +1,60 @@
+<% page_title "#{post.title} · Field Notes" %>
+
+<article>
+  <% unless post.published? %><p class="eyebrow">Draft</p><% end %>
+  <% if post.archived? %><p class="eyebrow">Archived</p><% end %>
+  <h1><%= post.title %></h1>
+  <% if post.cover? %>
+    <img src="<%= context.storage.url(post.cover_key) %>" alt="" class="post-cover">
+  <% end %>
+  <p class="post-body"><%= post.body %></p>
+
+  <% if can_manage %>
+    <nav class="actions">
+      <%= link "Edit", path("/posts/:id/edit", id: post.id) %>
+
+      <% unless post.published? || post.archived? %>
+        <%= button_to "Publish", path("/posts/:id/publish", id: post.id), context: %>
+      <% end %>
+
+      <% unless post.archived? %>
+        <%= button_to "Archive", path("/posts/:id/archive", id: post.id), context: %>
+      <% end %>
+
+      <%= button_to "Delete", path("/posts/:id", id: post.id), method: "delete", context: %>
+    </nav>
+  <% end %>
+</article>
+
+<section class="comments">
+  <h2>Comments</h2>
+
+  <% if post.comments.any? %>
+    <% post.comments.each do |comment| %>
+      <article class="comment">
+        <strong><%= comment.author_name %></strong>
+        <p><%= comment.body %></p>
+      </article>
+    <% end %>
+  <% else %>
+    <p>No comments yet.</p>
+  <% end %>
+
+  <% unless post.archived? %>
+    <h3>Add a comment</h3>
+    <%= error_messages comment_errors %>
+    <%= form_start path("/posts/:id/comments", id: post.id), method: "post", context: %>
+      <label>
+        Name
+        <input name="author_name" value="<%= comment.author_name %>" required>
+      </label>
+
+      <label>
+        Comment
+        <textarea name="body" required><%= comment.body %></textarea>
+      </label>
+
+      <button type="submit">Post comment</button>
+    <%= form_end %>
+  <% end %>
+</section>

@@ -1,0 +1,23 @@
+# Hacienda website
+
+The framework website is itself a small Hacienda application. It has no
+database or session state: routes map directly to module actions and ERB views.
+
+Start it from this repository:
+
+```sh
+bundle install
+bundle exec hac start
+```
+
+Open <http://localhost:5151>. The site includes:
+
+- a product homepage explaining Hacienda’s design;
+- a ten-minute generated blog walkthrough;
+- the complete Hacienda Supply guide rendered from `docs/getting-started.md`.
+
+Run its integration tests with:
+
+```sh
+bundle exec rake test
+```

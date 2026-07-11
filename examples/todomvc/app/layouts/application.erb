@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= document_title %></title>
+    <%= stylesheet_link "application.css" %>
+    <%= hacienda_navigation context %>
+    <%= javascript_include "helium-csp.js", module: true %>
+  </head>
+  <body>
+    <%= navigation_page content, context: context %>
+  </body>
+</html>

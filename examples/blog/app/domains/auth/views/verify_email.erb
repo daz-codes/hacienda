@@ -1,0 +1,10 @@
+<% page_title "Verify email · Field Notes" %>
+
+<h1>Verify your email</h1>
+<%= error_messages errors %>
+<% unless token.to_s.empty? %>
+  <%= form_start "/verify-email", context: %>
+    <input type="hidden" name="token" value="<%= token %>">
+    <button type="submit">Verify email</button>
+  <%= form_end %>
+<% end %>

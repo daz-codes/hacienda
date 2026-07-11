@@ -1,0 +1,11 @@
+<% page_title "Log in" %>
+
+<h1>Log in</h1>
+<%= error_messages [error].compact %>
+<%= form_start "/login", context: %>
+  <label>Email <input type="email" name="email" value="<%= email %>" required></label>
+  <label>Password <input type="password" name="password" required></label>
+  <button type="submit">Log in</button>
+<%= form_end %>
+<p><%= link "Email me a login link", "/magic-login" %></p>
+<p><%= link "Forgot your password?", "/password/forgot" %></p>

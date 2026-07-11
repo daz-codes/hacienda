@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= document_title %></title>
+    <%= stylesheet_link "application.css" %>
+    <%= hacienda_navigation context %>
+    <%= javascript_include "helium-csp.js", module: true %>
+  </head>
+  <body @data="{ menuOpen: false }">
+    <header>
+      <%= link "Field Notes", "/", class: "brand" %>
+      <button type="button" @click="menuOpen = !menuOpen">Menu</button>
+      <nav @visible="menuOpen">
+        <%= link "Posts", "/posts", data_hacienda_active_prefix: "/posts" %>
+        <% if context.current_user %>
+          <%= link "Write", "/posts/new" %>
+          <%= button_to "Log out", "/logout", method: "delete", context: %>
+        <% else %>
+          <%= link "Log in", "/login" %>
+          <%= link "Sign up", "/signup" %>
+        <% end %>
+      </nav>
+    </header>
+    <%= navigation_page content, context: context %>
+  </body>
+</html>

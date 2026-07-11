@@ -1,0 +1,11 @@
+/.bundle
+/*.gem
+/coverage
+/tmp
+/node_modules
+/playwright-report
+/test-results
+/examples/*/db/*.sqlite3
+/examples/*/log/*.log
+/examples/*/storage
+.DS_Store

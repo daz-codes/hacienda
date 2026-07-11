@@ -1,0 +1,181 @@
+===== app/domains/posts/actions.rb =====
+# frozen_string_literal: true
+
+module Posts
+  module Index
+    def self.respond(_context, params)
+      {posts: Repository.all}
+    end
+  end
+
+  module Show
+    def self.respond(_context, params)
+      {post: Repository.find(params[:id])}
+    end
+  end
+
+  module New
+    def self.respond(_context, params)
+      {post: Post.new, errors: []}
+    end
+  end
+
+  module Create
+    def self.respond(context, params)
+      attributes = params.permit(:title, :body).transform_values { |value| value.to_s.strip }
+      post = Post.new(
+        title: attributes[:title],
+        body: attributes[:body]
+      )
+      return render(:new, post:, errors: post.errors, status: 422) if post.invalid?
+
+      Repository.save(post)
+      context.flash[:notice] = "Post created."
+      redirect "/posts/#{post.id}"
+    end
+  end
+
+  module Edit
+    def self.respond(_context, params)
+      {post: Repository.find(params[:id]), errors: []}
+    end
+  end
+
+  module Update
+    def self.respond(context, params)
+      post = Repository.find(params[:id])
+      attributes = params.permit(:title, :body).transform_values { |value| value.to_s.strip }
+      post.title = attributes[:title]
+      post.body = attributes[:body]
+      return render(:edit, post:, errors: post.errors, status: 422) if post.invalid?
+
+      Repository.save(post)
+      context.flash[:notice] = "Post updated."
+      redirect "/posts/#{post.id}"
+    end
+  end
+
+  module Destroy
+    def self.respond(context, params)
+      post = Repository.find(params[:id])
+      Repository.delete(post)
+      context.flash[:notice] = "Post deleted."
+      redirect "/posts"
+    end
+  end
+end
+
+===== app/domains/posts/post.rb =====
+# frozen_string_literal: true
+
+module Posts
+  class Post
+    include Hacienda::Attributes
+    include Hacienda::Validations
+
+    attributes :id, :created_at, :updated_at
+    attribute :title, default: ""
+    attribute :body, default: ""
+
+    def validate
+      errors.add :title, "is required" if title.to_s.strip.empty?
+      errors.add :body, "is required" if body.to_s.strip.empty?
+    end
+  end
+end
+
+===== app/domains/posts/repository.rb =====
+# frozen_string_literal: true
+
+module Posts
+  module Repository
+    STORE = Hacienda::Store.new(
+      database: APP.database,
+      table: :posts,
+      record: Post
+    )
+
+    module_function
+
+    def all
+      STORE.all(dataset.reverse_order(:created_at))
+    end
+
+    def find(id)
+      STORE.find(id)
+    end
+
+    def save(record)
+      STORE.save(record)
+    end
+
+    def delete(record)
+      STORE.delete(record)
+    end
+
+    def dataset
+      STORE.dataset
+    end
+  end
+end
+
+===== app/domains/posts/routes.rb =====
+get "/posts", :index
+get "/posts/new", :new
+post "/posts", :create
+get "/posts/:id", :show
+get "/posts/:id/edit", :edit
+patch "/posts/:id", :update
+delete "/posts/:id", :destroy
+
+===== app/domains/posts/views/form.erb =====
+<%= error_messages errors %>
+
+<%= form_start action, method:, context: %>
+
+  <label>
+    Title
+    <input name="title" value="<%= post.title %>" required>
+  </label>
+
+  <label>
+    Body
+    <textarea name="body" required><%= post.body %></textarea>
+  </label>
+
+  <button type="submit">Save</button>
+<%= form_end %>
+
+===== app/domains/posts/views/index.erb =====
+<% page_title "Posts" %>
+
+<header>
+  <h1>Posts</h1>
+  <%= link "New post", "/posts/new" %>
+</header>
+
+<% posts.each do |post| %>
+  <%= component :post_card, post: post %>
+<% end %>
+
+===== app/domains/posts/views/show.erb =====
+<% page_title post.title %>
+
+<article>
+  <h1><%= post.title %></h1>
+  <p><%= post.body %></p>
+  <%= link "Edit", path("/posts/:id/edit", id: post.id) %>
+</article>
+
+===== db/migrations/TIMESTAMP_create_posts.rb =====
+Sequel.migration do
+  change do
+    create_table(:posts) do
+      primary_key :id
+      String :title, null: false
+      String :body, text: true, null: false
+      DateTime :created_at, null: false
+      DateTime :updated_at, null: false
+    end
+  end
+end

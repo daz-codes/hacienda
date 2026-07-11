@@ -1,0 +1,12 @@
+<% page_title "Unsubscribe" %>
+
+<h1>Unsubscribe</h1>
+<%= error_messages errors %>
+
+<% if subscriber %>
+  <p>Stop stock notifications for <strong><%= subscriber.email %></strong>?</p>
+  <%= form_start "/unsubscribe", context: %>
+    <input type="hidden" name="token" value="<%= token %>">
+    <button type="submit" class="danger">Unsubscribe</button>
+  <%= form_end %>
+<% end %>

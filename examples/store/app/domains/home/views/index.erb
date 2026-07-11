@@ -1,0 +1,17 @@
+<% page_title "Home" %>
+
+<section>
+  <p class="eyebrow">Domain-oriented Ruby</p>
+  <h1><%= framework %> is running.</h1>
+  <p>Your application is explicit, HTML-first, and ready for a domain.</p>
+
+  <%= component :feature,
+        title: "No controllers required",
+        detail: "This page came from Home::Index and views/index.erb." %>
+
+  <button @click="count++">
+    Helium clicks: <strong @text="count">0</strong>
+  </button>
+
+  <p><code><%= command %> generate domain posts</code> is coming next.</p>
+</section>

@@ -1,0 +1,15 @@
+<% page_title workout.activity %>
+
+<article class="workout-detail-shell">
+  <%= partial :program, workout:, context: %>
+
+  <div class="form-actions detail-actions">
+    <a href="/workouts/<%= workout.id %>/edit" class="button">Regenerate</a>
+    <a href="/workouts" class="text-link">All workouts</a>
+    <form method="post" action="/workouts/<%= workout.id %>" @submit="confirm('Delete this workout?') || $event.preventDefault()">
+      <%= csrf_field context %>
+      <%= method_field :delete %>
+      <button class="button-link danger">Delete</button>
+    </form>
+  </div>
+</article>
