@@ -8,7 +8,7 @@ module Home
       {
         request_example: <<~'RUBY',
           module Posts
-            class PublishingActions < Hacienda::Actions
+            class PublishingActions < Lunula::Actions
               def publish(context, params)
                 post = Repository.find(params[:id])
                 Posts.publish(post)

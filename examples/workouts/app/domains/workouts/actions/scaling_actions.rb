@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Workouts
-  class ScalingActions < Hacienda::Actions
+  class ScalingActions < Lunula::Actions
     def scale_up(context, params)
       scale(context, params[:id], :scale_up)
     end

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Products
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def index(_context, _params)
       {products: Repository.all}
     end

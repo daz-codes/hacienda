@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "hacienda", path: "../.."
+gem "lunula", path: "../.."
 gem "openai", "~> 0.66"
 gem "puma", "~> 7.0"
 gem "rack-session", "~> 2.1"

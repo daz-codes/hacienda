@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><%= document_title %></title>
     <%= stylesheet_link "application.css" %>
-    <%= hacienda_navigation context %>
+    <%= morpheus_navigation context %>
     <%= javascript_include "helium-csp.js", module: true %>
   </head>
   <body @data="{ menuOpen: false }">
@@ -13,7 +13,7 @@
       <%= link "Field Notes", "/", class: "brand" %>
       <button type="button" @click="menuOpen = !menuOpen">Menu</button>
       <nav @visible="menuOpen">
-        <%= link "Posts", "/posts", data_hacienda_active_prefix: "/posts" %>
+        <%= link "Posts", "/posts", data_lunula_active_prefix: "/posts" %>
         <% if context.current_user %>
           <%= link "Write", "/posts/new" %>
           <%= button_to "Log out", "/logout", method: "delete", context: %>

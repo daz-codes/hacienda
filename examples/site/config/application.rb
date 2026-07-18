@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-require "hacienda"
+require "lunula"
 
 APP_ROOT = File.expand_path("..", __dir__) unless defined?(APP_ROOT)
-Hacienda.root = APP_ROOT
+Lunula.root = APP_ROOT
 require_relative "environment"
 
-APP = Hacienda::Application.new(
+APP = Lunula::Application.new(
   root: APP_ROOT,
-  title: "Hacienda",
-  reload: Hacienda.reload,
+  title: "Lunula",
+  reload: Lunula.reload,
   navigation: {
     enabled: true,
     prefetch: :intent,

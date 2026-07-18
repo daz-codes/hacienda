@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require "hacienda/generator"
+require "lunula/generator"
 
 class GeneratorSnapshotTest < Minitest::Test
   NEW_APP_FILES = %w[
@@ -18,7 +18,7 @@ class GeneratorSnapshotTest < Minitest::Test
     config/environments/development.rb
     config/environments/test.rb
     config/environments/production.rb
-    db/migrations/20260629000000_create_hacienda_runtime.rb
+    db/migrations/20260629000000_create_lunula_runtime.rb
     app/domains/home/routes.rb
     app/domains/home/actions.rb
     app/domains/home/views/index.erb
@@ -66,10 +66,10 @@ class GeneratorSnapshotTest < Minitest::Test
   ].freeze
 
   def setup
-    @directory = Dir.mktmpdir("hacienda-snapshot")
+    @directory = Dir.mktmpdir("lunula-snapshot")
     @root = File.join(@directory, "snapshot")
     @framework_root = File.expand_path("..", __dir__)
-    @generator = Hacienda::Generator.new(
+    @generator = Lunula::Generator.new(
       target: @root,
       source_root: @framework_root,
       cwd: @directory
@@ -111,7 +111,7 @@ class GeneratorSnapshotTest < Minitest::Test
   def test_repeated_new_app_attempt_does_not_delete_the_existing_application
     @generator.new_app
 
-    error = assert_raises(Hacienda::Generator::Error) { @generator.new_app }
+    error = assert_raises(Lunula::Generator::Error) { @generator.new_app }
 
     assert_includes error.message, "destination already exists"
     assert_path_exists File.join(@root, "config", "application.rb")

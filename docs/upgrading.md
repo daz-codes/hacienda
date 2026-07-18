@@ -1,8 +1,8 @@
-# Upgrading Hacienda
+# Upgrading Lunula
 
 ## Versioning policy
 
-Hacienda uses semantic versioning for the public contract in
+Lunula uses semantic versioning for the public contract in
 [`public-api.md`](public-api.md).
 
 - Patch releases fix defects without intentionally changing public behavior.
@@ -31,7 +31,7 @@ Security fixes may shorten this window. The release notes must explain why.
 
 ## Application upgrade procedure
 
-1. Pin the target Hacienda version and read every intervening changelog entry.
+1. Pin the target Lunula version and read every intervening changelog entry.
 2. Back up the database, uploaded files, credentials, and deployment secrets.
 3. Run the generated-file diff for the previous release tag:
 
@@ -43,15 +43,38 @@ Security fixes may shorten this window. The release notes must explain why.
    Do not replace the application with a newly generated copy.
 5. Add new framework migrations as new migration files. Never edit a migration
    that has already run in another environment.
-6. Run `bundle exec hac db:migrate`, the application test suite, `db:check`, and
+6. Run `bundle exec luna db:migrate`, the application test suite, `db:check`, and
    the job health checks in a staging copy before production deployment.
 7. Deploy application processes and migrations using the ordering stated in
    that release's notes. Keep the database backup until rollback is no longer
    required.
 
-Hacienda does not currently provide `hac update`. Generated files are explicit
+Lunula does not currently provide `luna update`. Generated files are explicit
 and application-owned, so upgrades are reviewable source changes rather than an
 automatic rewrite.
+
+## Pre-1.0 repository change
+
+The pre-release `STORE` and `module_function` repository convention has been
+removed. Convert an application repository to the compact facade:
+
+```ruby
+module Products
+  module Repository
+    extend Lunula::Repository
+
+    store database: APP.database, table: :products, record: Product
+  end
+end
+```
+
+Remove basic Store delegation methods. Replace `STORE.all(scope)`,
+`STORE.first(scope)`, `STORE.load(row)`, and `STORE.refresh(record)` with the
+same methods on the repository. Custom finder names remain ordinary Ruby
+methods. Replace nullable uses of the old `find` convention with
+`find_by(id: ...)`; the facade's `find` always raises `Lunula::NotFound` when
+the row is missing. Empty repositories previously emitted by `generate domain`
+can be deleted because repositories are now generated only with persistence.
 
 ## Generated files
 
@@ -67,7 +90,7 @@ upgrade notes and includes exact manual steps.
 
 ## Migrations and persisted data
 
-Published Hacienda runtime migrations are append-only. A release may add a new
+Published Lunula runtime migrations are append-only. A release may add a new
 migration, but must not silently alter an already published migration. Schema
 changes support rolling deployment when practical; otherwise release notes must
 state the required shutdown ordering and rollback boundary.

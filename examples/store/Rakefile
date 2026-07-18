@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 APP_ROOT = File.expand_path(__dir__) unless defined?(APP_ROOT)
-require "hacienda"
+require "lunula"
 require "rake/testtask"
 require "sequel"
 require "sequel/extensions/migration"

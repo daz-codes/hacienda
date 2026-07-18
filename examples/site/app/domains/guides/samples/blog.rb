@@ -9,14 +9,14 @@ module Guides
       {
         samples: {
           install: <<~SHELL,
-            gem install hacienda
-            hac new journal
+            gem install lunula
+            luna new journal
             cd journal
             bundle install
           SHELL
           generate: <<~SHELL,
-            bundle exec hac generate rest posts
-            bundle exec hac db:migrate
+            bundle exec luna generate rest posts
+            bundle exec luna db:migrate
           SHELL
           routes: <<~RUBY,
             get "/posts", :index
@@ -29,7 +29,7 @@ module Guides
           RUBY
           action: <<~RUBY,
             module Posts
-              class Actions < Hacienda::Actions
+              class Actions < Lunula::Actions
                 def index(_context, _params)
                   {posts: Repository.all}
                 end
@@ -39,8 +39,8 @@ module Guides
           post: <<~RUBY,
             module Posts
               class Post
-                include Hacienda::Attributes
-                include Hacienda::Validations
+                include Lunula::Attributes
+                include Lunula::Validations
 
                 attributes :id, :created_at, :updated_at
                 attribute :title, default: ""
@@ -66,7 +66,7 @@ module Guides
             <% end %>
           ERB
           run: <<~SHELL
-            bundle exec hac start
+            bundle exec luna start
             # Open http://localhost:5151/posts
           SHELL
         }

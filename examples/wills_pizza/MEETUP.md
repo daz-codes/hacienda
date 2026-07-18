@@ -1,22 +1,22 @@
 # Will's Pizza Meetup Guide
 
-## A Quick Hacienda Introduction
+## A Quick Lunula Introduction
 
-- Hacienda is a pre-1.0, domain-oriented Ruby web framework built on Rack,
+- Lunula is a pre-1.0, domain-oriented Ruby web framework built on Rack,
   Sequel, ERB, and Zeitwerk.
 - It aims at the same HTML-first, full-stack territory as modern Rails, without
   requiring Rails, Active Record, or a Node toolchain.
 - Code is grouped by business domain rather than by framework-wide folders:
   each domain owns its routes, actions, model objects, repository, and views.
-- Actions are ordinary instance methods receiving `(context, params)`. Hacienda
+- Actions are ordinary instance methods receiving `(context, params)`. Lunula
   creates a fresh action object for every request.
 - Data flow stays explicit: an action returns a locals hash or an explicit
   render/redirect response; views only receive those locals and the request
   context.
 - Persistence is explicit through small repositories and Sequel. Domain objects
-  are plain Ruby objects using `Hacienda::Attributes` and validations where
+  are plain Ruby objects using `Lunula::Attributes` and validations where
   useful.
-- HTML is rendered on the server. Hacienda navigation and Helium can add partial
+- HTML is rendered on the server. Lunula navigation and Helium can add partial
   page updates and small interactions without making JavaScript the application
   architecture.
 - Authentication, mail, jobs, events, caching, storage, security middleware,
@@ -77,7 +77,7 @@ to contain a database-backed model.
 ## A 60-Minute Build
 
 1. **Five minutes: scaffold and orient.** Generate the app, auth, and the two
-   domains. Run `hac routes` and point out that each business area is together.
+   domains. Run `luna routes` and point out that each business area is together.
 2. **Fifteen minutes: build the menu.** Add the pizza migration, `Pizza`, its
    repository queries, public action methods, routes, and the menu view.
 3. **Ten minutes: protect menu management.** Generate auth, seed Will's verified
@@ -92,13 +92,13 @@ to contain a database-backed model.
 Useful starting commands:
 
 ```sh
-hac new wills_pizza
+luna new wills_pizza
 cd wills_pizza
-bundle exec hac generate auth
-bundle exec hac generate domain pizzas
-bundle exec hac generate domain orders
-bundle exec hac db:migrate
-bundle exec hac routes
+bundle exec luna generate auth
+bundle exec luna generate domain pizzas
+bundle exec luna generate domain orders
+bundle exec luna db:migrate
+bundle exec luna routes
 bundle exec rake test
 ```
 
@@ -144,7 +144,7 @@ Let attendees implement the `Pizzas` flow first, then pair on `Orders`.
 ## Stretch Work
 
 - Add order status management for kitchen staff.
-- Send an order confirmation using Hacienda mail and enqueue delivery after the
+- Send an order confirmation using Lunula mail and enqueue delivery after the
   database transaction commits.
 - Add size and topping choices without turning `Pizza` into an unbounded bag of
   options.

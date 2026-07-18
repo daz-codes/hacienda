@@ -15,7 +15,7 @@ else
   require "sequel/extensions/migration"
 
   class PostgreSQLContractRecord
-    include Hacienda::Attributes
+    include Lunula::Attributes
 
     attributes :id, :name, :metadata, :created_at, :updated_at
     attribute :lock_version, default: 0, cast: ->(value) { value.to_i }
@@ -44,7 +44,7 @@ else
     MIGRATIONS = File.expand_path("../examples/store/db/migrations", __dir__)
 
     def setup
-      @schema = :"hacienda_test_#{Process.pid}_#{SecureRandom.hex(6)}"
+      @schema = :"lunula_test_#{Process.pid}_#{SecureRandom.hex(6)}"
       @admin = Sequel.connect(ENV.fetch("POSTGRES_DATABASE_URL"), max_connections: 1)
       @admin.create_schema(@schema)
       @database = Sequel.connect(ENV.fetch("POSTGRES_DATABASE_URL"), max_connections: 1)
@@ -59,41 +59,42 @@ else
       @database&.disconnect
       @admin&.drop_schema(@schema, cascade: true) if @schema
       @admin&.disconnect
-      Hacienda.configure_jobs(adapter: :inline)
+      Lunula.configure_jobs(adapter: :inline)
       PostgreSQLRecorderJob.calls.clear
     end
 
     def test_generated_migrations_apply_to_postgresql
       expected = %i[
-        hacienda_jobs
-        hacienda_job_outbox
-        hacienda_job_workers
-        hacienda_job_queues
-        hacienda_outbox
-        hacienda_recurring_runs
-        hacienda_sessions
+        lunula_jobs
+        lunula_job_outbox
+        lunula_job_workers
+        lunula_job_queues
+        lunula_outbox
+        lunula_recurring_runs
+        lunula_sessions
       ]
 
       expected.each { |table| assert @database.table_exists?(table), "expected #{table} to exist" }
-      assert Hacienda::Migrations.current?(database: @database, directory: MIGRATIONS)
+      assert Lunula::Migrations.current?(database: @database, directory: MIGRATIONS)
     end
 
-    def test_store_crud_transactions_and_optimistic_locking
-      store = contract_store
-      record = store.save(PostgreSQLContractRecord.new(name: "Initial", metadata: {"portable" => true}))
-      first = store.find(record.id)
-      stale = store.find(record.id)
+    def test_repository_crud_finders_transactions_and_optimistic_locking
+      repository = contract_repository
+      record = repository.save(PostgreSQLContractRecord.new(name: "Initial", metadata: {"portable" => true}))
+      first = repository.find(record.id)
+      stale = repository.find(record.id)
 
       first.name = "Committed"
-      store.save(first)
+      repository.save(first)
       stale.name = "Stale"
 
-      assert_raises(Hacienda::Store::StaleObject) { store.save(stale) }
-      assert_equal "Committed", store.find(record.id).name
-      assert_equal({"portable" => true}, store.find(record.id).metadata)
+      assert_raises(Lunula::Store::StaleObject) { repository.save(stale) }
+      assert_equal "Committed", repository.find_by!(name: "Committed").name
+      assert_equal({"portable" => true}, repository.find(record.id).metadata)
+      assert_nil repository.find_by(name: "Missing")
 
       @database.transaction do
-        store.save(PostgreSQLContractRecord.new(name: "Rolled back"))
+        repository.save(PostgreSQLContractRecord.new(name: "Rolled back"))
         raise Sequel::Rollback
       end
 
@@ -109,20 +110,20 @@ else
       assert_equal id, execution.id
       assert_equal :succeeded, execution.status
       assert_equal ["portable"], PostgreSQLRecorderJob.calls
-      refute_nil @database[:hacienda_jobs].where(id:).get(:completed_at)
+      refute_nil @database[:lunula_jobs].where(id:).get(:completed_at)
 
       failed_id = adapter.enqueue(PostgreSQLFailingJob, args: [], kwargs: {})
       assert_equal :retrying, adapter.work_once.status
       @now += 1
       assert_equal :failed, adapter.work_once.status
-      refute_nil @database[:hacienda_jobs].where(id: failed_id).get(:failed_at)
+      refute_nil @database[:lunula_jobs].where(id: failed_id).get(:failed_at)
 
       @database.transaction do
         adapter.enqueue(PostgreSQLRecorderJob, args: ["rolled back"], kwargs: {})
         raise Sequel::Rollback
       end
 
-      assert_equal 2, @database[:hacienda_jobs].count
+      assert_equal 2, @database[:lunula_jobs].count
     end
 
     private
@@ -138,24 +139,30 @@ else
       end
     end
 
-    def contract_store
-      Hacienda::Store.new(
-        database: @database,
-        table: :contract_records,
-        record: PostgreSQLContractRecord,
-        lock: :lock_version,
-        coercions: {
-          metadata: {
-            load: ->(value) { JSON.parse(value.to_s) },
-            dump: ->(value) { JSON.generate(value || {}) }
-          }
-        },
-        clock: -> { @now }
-      )
+    def contract_repository
+      database = @database
+      clock = -> { @now }
+      Module.new do
+        extend Lunula::Repository
+
+        store(
+          database: database,
+          table: :contract_records,
+          record: PostgreSQLContractRecord,
+          lock: :lock_version,
+          coercions: {
+            metadata: {
+              load: ->(value) { JSON.parse(value.to_s) },
+              dump: ->(value) { JSON.generate(value || {}) }
+            }
+          },
+          clock: clock
+        )
+      end
     end
 
     def database_adapter
-      Hacienda::Jobs::Adapters::Database.new(
+      Lunula::Jobs::Adapters::Database.new(
         database: @database,
         lease_seconds: 60,
         retry_delay: ->(_attempt) { 1 },

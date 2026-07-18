@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Posts
-  class PublishingActions < Hacienda::Actions
+  class PublishingActions < Lunula::Actions
     def publish(context, params)
       transition(context, params[:id], :publish, Events::Published)
     end

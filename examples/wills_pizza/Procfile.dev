@@ -1,3 +1,3 @@
-web: bundle exec hac start
-worker: bundle exec hac jobs:work --queue default --threads 2 --batch-size 5
-scheduler: bundle exec hac jobs:schedule
+web: bundle exec luna start
+worker: bundle exec luna jobs:work --queue default --threads 2 --batch-size 5
+scheduler: bundle exec luna jobs:schedule

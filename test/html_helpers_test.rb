@@ -6,7 +6,7 @@ class HTMLHelpersTest < Minitest::Test
   FakeContext = Struct.new(:csrf_token, :csp_nonce, keyword_init: true)
 
   def setup
-    @view = Hacienda::Renderer::ViewContext.new(nil, "posts", {})
+    @view = Lunula::Renderer::ViewContext.new(nil, "posts", {})
     @context = FakeContext.new(csrf_token: "secure-token", csp_nonce: "nonce-token")
   end
 

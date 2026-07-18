@@ -23,8 +23,8 @@ module Auth
     end
 
     def verified_user(token, purpose:)
-      payload = Hacienda.signed_token.verify(token, purpose:)
-      user = payload && Repository.find(payload["user_id"])
+      payload = Lunula.signed_token.verify(token, purpose:)
+      user = payload && Repository.find_by(id: payload["user_id"])
       user if user && yield(user, payload)
     end
     private_class_method :verified_user

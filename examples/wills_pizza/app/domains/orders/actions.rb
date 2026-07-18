@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Orders
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def new(_context, _params)
       checkout_page
     end

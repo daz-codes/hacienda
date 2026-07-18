@@ -2,8 +2,8 @@
 
 module Todos
   class Todo
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
 
     attributes :id, :created_at, :updated_at
     attribute :title, default: ""

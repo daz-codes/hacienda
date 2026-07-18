@@ -5,7 +5,7 @@ require "json"
 
 class ParamsTest < Minitest::Test
   def test_symbolizes_top_level_and_nested_keys
-    params = Hacienda::Params.new(
+    params = Lunula::Params.new(
       {
         "post" => {"title" => "Hello", "tags" => [{"name" => "ruby"}]},
         "page" => "1"
@@ -19,13 +19,13 @@ class ParamsTest < Minitest::Test
   end
 
   def test_slice_returns_only_requested_top_level_keys
-    params = Hacienda::Params.new("title" => "Hello", "admin" => "1")
+    params = Lunula::Params.new("title" => "Hello", "admin" => "1")
 
     assert_equal({title: "Hello"}, params.slice(:title, :body))
   end
 
   def test_permit_returns_only_scalar_top_level_keys
-    params = Hacienda::Params.new(
+    params = Lunula::Params.new(
       "title" => "Hello",
       "admin" => "1",
       "post" => {"body" => "Nested"}
@@ -35,7 +35,7 @@ class ParamsTest < Minitest::Test
   end
 
   def test_require_returns_nested_params
-    params = Hacienda::Params.new(
+    params = Lunula::Params.new(
       "post" => {"title" => "Hello", "admin" => "1"}
     )
 
@@ -43,14 +43,14 @@ class ParamsTest < Minitest::Test
   end
 
   def test_require_raises_bad_request_when_missing
-    params = Hacienda::Params.new({})
+    params = Lunula::Params.new({})
 
-    error = assert_raises(Hacienda::BadRequest) { params.require(:post) }
+    error = assert_raises(Lunula::BadRequest) { params.require(:post) }
     assert_equal "param is missing or empty: post", error.message
   end
 
   def test_permit_allows_declared_nested_hashes
-    params = Hacienda::Params.new(
+    params = Lunula::Params.new(
       "post" => {
         "title" => "Hello",
         "author" => {"name" => "Daz", "admin" => "1"}
@@ -64,7 +64,7 @@ class ParamsTest < Minitest::Test
   end
 
   def test_permit_allows_declared_nested_arrays
-    params = Hacienda::Params.new(
+    params = Lunula::Params.new(
       "tags" => ["ruby", "web", {"unsafe" => "hash"}],
       "comments" => [
         {"body" => "First", "admin" => "1"},
@@ -88,7 +88,7 @@ class ParamsTest < Minitest::Test
       params: {"post" => {"title" => "Form post"}}
     )
 
-    params = Hacienda::Params.from_request(Rack::Request.new(env))
+    params = Lunula::Params.from_request(Rack::Request.new(env))
 
     assert_equal "Form post", params.dig(:post, :title)
   end
@@ -103,9 +103,9 @@ class ParamsTest < Minitest::Test
     )
     request = Rack::Request.new(env)
 
-    first = Hacienda::Params.request_data(request)
+    first = Lunula::Params.request_data(request)
     request.body.read
-    second = Hacienda::Params.request_data(request)
+    second = Lunula::Params.request_data(request)
 
     assert_same first, second
     assert_equal({"password" => "secret"}, second)

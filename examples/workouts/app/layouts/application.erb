@@ -6,13 +6,13 @@
     <meta name="csrf-token" content="<%= context.csrf_token %>">
     <title><%= document_title %></title>
     <%= stylesheet_link "application.css" %>
-    <%= hacienda_navigation context %>
+    <%= morpheus_navigation context %>
     <%= javascript_include "helium-csp.js", module: true %>
   </head>
   <body>
     <header class="site-header">
       <a href="/" class="brand">Volt Workouts</a>
-      <a href="/workouts/new" class="button button-small" data-hacienda-active-prefix="/workouts/new">Generate workout</a>
+      <a href="/workouts/new" class="button button-small" data-morpheus-active-prefix="/workouts/new">Generate workout</a>
     </header>
 
     <%= navigation_page content, context: context %>

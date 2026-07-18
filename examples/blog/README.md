@@ -1,6 +1,6 @@
 # Field Notes
 
-A working blog that demonstrates Hacienda’s intended application architecture.
+A working blog that demonstrates Lunula’s intended application architecture.
 
 ## Run it
 
@@ -8,14 +8,14 @@ Use Ruby 3.2 or newer:
 
 ```sh
 bundle install
-bundle exec hac db:migrate
-bundle exec hac db:seed
-bundle exec hac start
+bundle exec luna db:migrate
+bundle exec luna db:seed
+bundle exec luna start
 ```
 
 Visit `http://localhost:5151`, sign up, write a post, and publish it.
 The optional seed uses `writer@example.com` / `change-this-password`.
-Auth emails are queued with Hacienda jobs and delivered through the configured
+Auth emails are queued with Lunula jobs and delivered through the configured
 mail adapter.
 
 Development defaults to the in-process job adapter and immediate after-commit
@@ -23,15 +23,15 @@ events. To exercise the durable jobs and transactional outbox, run both the web
 process and worker with the database options:
 
 ```sh
-HACIENDA_JOB_ADAPTER=database HACIENDA_EVENT_OUTBOX=database bundle exec hac start
-HACIENDA_JOB_ADAPTER=database HACIENDA_EVENT_OUTBOX=database bundle exec hac jobs:work
+LUNULA_JOB_ADAPTER=database LUNULA_EVENT_OUTBOX=database bundle exec luna start
+LUNULA_JOB_ADAPTER=database LUNULA_EVENT_OUTBOX=database bundle exec luna jobs:work
 ```
 
 Publishing or archiving a post then writes its activity event to the outbox in
 the same transaction. The worker dispatches it to the subscribers registered in
 `config/events.rb`.
 
-Same-origin GET links use Hacienda Navigation: the posts content is prefetched
+Same-origin GET links use Morpheus: the posts content is prefetched
 on intent and morphed with Idiomorph while the layout stays in place. Normal
 forms remain native, and Helium continues to bind changed content through its
 MutationObserver.
@@ -43,7 +43,7 @@ shared store is configured.
 
 Authors can attach a cover image. The multipart action validates and stores it,
 `Posts::Coverable` owns the persisted metadata, and local files are streamed by
-Hacienda's protected `/uploads` middleware. Production storage remains disabled
+Lunula's protected `/uploads` middleware. Production storage remains disabled
 until `config/storage.rb` is connected to an object-store adapter; cover uploads
 fail closed with `storage is not configured` until then. `/uploads` is public
 capability-URL serving and must not be used for private documents.
@@ -63,7 +63,7 @@ bundle exec rackup -p 5151
 Open a console with the app loaded:
 
 ```sh
-bundle exec hac console
+bundle exec luna console
 ```
 
 ## Structure
@@ -99,7 +99,7 @@ app/domains/comments/
 Current-user loading is configured once:
 
 ```ruby
-APP = Hacienda::Application.new(
+APP = Lunula::Application.new(
   root: APP_ROOT,
   context_loaders: ["Auth::LoadCurrentUser"],
   database: DB
@@ -124,7 +124,7 @@ Actions receive request context separately from parameters:
 
 ```ruby
 module Posts
-  class PublishingActions < Hacienda::Actions
+  class PublishingActions < Lunula::Actions
     def publish(context, params)
       post = Repository.find(params[:id])
       return response("Forbidden", status: 403) unless
@@ -160,8 +160,8 @@ Domain behavior is composed into ordinary Ruby objects:
 ```ruby
 module Posts
   class Post
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
     include Publishable
     include Archivable
   end
@@ -195,17 +195,17 @@ context.transaction do |transaction|
 end
 ```
 
-Custom queries stay as Sequel datasets while Store provides the common row
-mapping:
+Custom queries stay as Sequel datasets while `Lunula::Repository` provides
+the common row mapping over Store:
 
 ```ruby
 def published
-  scope = STORE.dataset
+  scope = dataset
     .exclude(published_at: nil)
     .where(archived_at: nil)
     .reverse_order(:published_at)
 
-  STORE.all(scope)
+  all(scope)
 end
 ```
 
@@ -218,7 +218,7 @@ guards. CSRF protection and sessions are Rack middleware. There are no
 controller base classes, inherited callbacks, or global `Current.user`.
 
 The current example verifies email addresses before login and supports password
-resets. Both flows use Hacienda signed tokens and the mail delivery adapter.
+resets. Both flows use Lunula signed tokens and the mail delivery adapter.
 Verification is confirmed by POST, and reset links use a reset-version token
 rather than exposing password hashes.
 

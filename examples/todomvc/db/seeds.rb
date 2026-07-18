@@ -3,7 +3,7 @@
 now = Time.now
 
 [
-  ["Learn Hacienda", true],
+  ["Learn Lunula", true],
   ["Build TodoMVC with domains", true],
   ["Use too much Helium", false]
 ].each do |title, completed|

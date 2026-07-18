@@ -1,23 +1,23 @@
 # frozen_string_literal: true
 
 job_adapter_name = ENV.fetch(
-  "HACIENDA_JOB_ADAPTER",
-  Hacienda.env.test? ? "inline" : Hacienda.env.production? ? "database" : "async"
+  "LUNULA_JOB_ADAPTER",
+  Lunula.env.test? ? "inline" : Lunula.env.production? ? "database" : "async"
 )
 
 job_adapter = if job_adapter_name == "database"
-  Hacienda::Jobs::Adapters::Database.new(
+  Lunula::Jobs::Adapters::Database.new(
     database: DB,
-    lease_seconds: Float(ENV.fetch("HACIENDA_JOB_LEASE_SECONDS", 300)),
-    heartbeat_interval: ENV["HACIENDA_JOB_HEARTBEAT_INTERVAL"]&.then { |value| Float(value) },
-    execution_timeout: ENV["HACIENDA_JOB_TIMEOUT"]&.then { |value| Float(value) },
-    worker_timeout: ENV["HACIENDA_JOB_WORKER_TIMEOUT"]&.then { |value| Float(value) }
+    lease_seconds: Float(ENV.fetch("LUNULA_JOB_LEASE_SECONDS", 300)),
+    heartbeat_interval: ENV["LUNULA_JOB_HEARTBEAT_INTERVAL"]&.then { |value| Float(value) },
+    execution_timeout: ENV["LUNULA_JOB_TIMEOUT"]&.then { |value| Float(value) },
+    worker_timeout: ENV["LUNULA_JOB_WORKER_TIMEOUT"]&.then { |value| Float(value) }
   )
 else
   job_adapter_name.to_sym
 end
 
-Hacienda.configure_jobs(
+Lunula.configure_jobs(
   adapter: job_adapter,
-  outbox: Hacienda::Jobs::Outbox.new(database: DB)
+  outbox: Lunula::Jobs::Outbox.new(database: DB)
 )

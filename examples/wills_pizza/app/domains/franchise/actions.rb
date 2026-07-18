@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
 module Franchise
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
   end
 end

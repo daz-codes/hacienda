@@ -14,7 +14,7 @@ class StorageTest < Minitest::Test
 
   def test_upload_normalizes_rack_multipart_hashes_and_filenames
     file = temporary_file("hello")
-    upload = Hacienda::Storage::Upload.wrap(
+    upload = Lunula::Storage::Upload.wrap(
       tempfile: file,
       filename: "..\\notes.txt",
       type: "Text/Plain; charset=utf-8"
@@ -28,8 +28,8 @@ class StorageTest < Minitest::Test
   end
 
   def test_store_returns_metadata_and_uses_unpredictable_versioned_keys
-    service = Hacienda::Storage::MemoryService.new
-    storage = Hacienda::Storage.new(
+    service = Lunula::Storage::MemoryService.new
+    storage = Lunula::Storage.new(
       service:,
       clock: -> { Time.utc(2026, 6, 28) },
       key_generator: -> { "generated-id" }
@@ -55,28 +55,28 @@ class StorageTest < Minitest::Test
   end
 
   def test_upload_size_and_content_type_validation
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
     upload = upload_hash("too large", filename: "notes.txt", type: "text/plain")
 
-    assert_raises(Hacienda::Storage::TooLarge) do
+    assert_raises(Lunula::Storage::TooLarge) do
       storage.store(upload, max_bytes: 3)
     end
-    assert_raises(Hacienda::Storage::UnsupportedType) do
+    assert_raises(Lunula::Storage::UnsupportedType) do
       storage.store(upload, content_types: ["image/*"])
     end
   end
 
   def test_content_inspector_rejects_spoofed_signatures_and_extensions
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
-    inspector = Hacienda::Storage::ContentTypeInspector.new
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
+    inspector = Lunula::Storage::ContentTypeInspector.new
 
-    assert_raises(Hacienda::Storage::InvalidContent) do
+    assert_raises(Lunula::Storage::InvalidContent) do
       storage.store(
         upload_hash("not a png", filename: "image.png", type: "image/png"),
         content_inspector: inspector
       )
     end
-    assert_raises(Hacienda::Storage::InvalidContent) do
+    assert_raises(Lunula::Storage::InvalidContent) do
       storage.store(
         upload_hash(png_bytes, filename: "image.txt", type: "image/png"),
         content_inspector: inspector
@@ -91,7 +91,7 @@ class StorageTest < Minitest::Test
   end
 
   def test_custom_content_inspector_can_scan_the_upload_and_rewinds_it
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
     inspected = nil
     inspector = lambda do |upload|
       inspected = [upload.filename, upload.io.read]
@@ -105,13 +105,13 @@ class StorageTest < Minitest::Test
   end
 
   def test_custom_content_inspector_can_reject_a_valid_header_with_active_polyglot_content
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
-    signature = Hacienda::Storage::ContentTypeInspector.new
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
+    signature = Lunula::Storage::ContentTypeInspector.new
     inspector = lambda do |upload|
       signature.call(upload) && !upload.io.read.include?("<script")
     end
 
-    assert_raises(Hacienda::Storage::InvalidContent) do
+    assert_raises(Lunula::Storage::InvalidContent) do
       storage.store(
         upload_hash("#{png_bytes}<script>alert(1)</script>", filename: "image.png", type: "image/png"),
         content_inspector: inspector
@@ -120,15 +120,15 @@ class StorageTest < Minitest::Test
   end
 
   def test_explicit_keys_reject_traversal_and_do_not_overwrite_by_default
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
     upload = upload_hash("first")
 
     ["../secret", "/absolute", "nested//file", "nested\\file", "./file"].each do |key|
-      assert_raises(Hacienda::Storage::InvalidKey) { storage.store(upload, key:) }
+      assert_raises(Lunula::Storage::InvalidKey) { storage.store(upload, key:) }
     end
 
     storage.store(upload, key: "documents/file.txt")
-    assert_raises(Hacienda::Storage::AlreadyExists) do
+    assert_raises(Lunula::Storage::AlreadyExists) do
       storage.store(upload_hash("second"), key: "documents/file.txt")
     end
     storage.store(upload_hash("second"), key: "documents/file.txt", overwrite: true)
@@ -136,7 +136,7 @@ class StorageTest < Minitest::Test
   end
 
   def test_memory_service_atomically_rejects_concurrent_writes_to_the_same_key
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
     results = 12.times.map do |index|
       Thread.new do
         storage.store(
@@ -144,7 +144,7 @@ class StorageTest < Minitest::Test
           key: "documents/shared.txt"
         )
         :stored
-      rescue Hacienda::Storage::AlreadyExists
+      rescue Lunula::Storage::AlreadyExists
         :exists
       end
     end.map(&:value)
@@ -155,8 +155,8 @@ class StorageTest < Minitest::Test
   end
 
   def test_disk_service_atomically_rejects_concurrent_writes_to_the_same_key
-    root = Dir.mktmpdir("hacienda-storage-race")
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::DiskService.new(root:))
+    root = Dir.mktmpdir("lunula-storage-race")
+    storage = Lunula::Storage.new(service: Lunula::Storage::DiskService.new(root:))
     results = 8.times.map do |index|
       Thread.new do
         storage.store(
@@ -164,7 +164,7 @@ class StorageTest < Minitest::Test
           key: "documents/shared.txt"
         )
         :stored
-      rescue Hacienda::Storage::AlreadyExists
+      rescue Lunula::Storage::AlreadyExists
         :exists
       end
     end.map(&:value)
@@ -177,8 +177,8 @@ class StorageTest < Minitest::Test
   end
 
   def test_disk_service_writes_inside_its_root
-    root = Dir.mktmpdir("hacienda-storage")
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::DiskService.new(root:))
+    root = Dir.mktmpdir("lunula-storage")
+    storage = Lunula::Storage.new(service: Lunula::Storage::DiskService.new(root:))
 
     blob = storage.store(upload_hash("on disk"), key: "documents/file.txt")
 
@@ -189,16 +189,16 @@ class StorageTest < Minitest::Test
   end
 
   def test_null_service_fails_loudly_on_write
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::NullService.new)
+    storage = Lunula::Storage.new(service: Lunula::Storage::NullService.new)
 
-    error = assert_raises(Hacienda::Storage::Unavailable) do
+    error = assert_raises(Lunula::Storage::Unavailable) do
       storage.store(upload_hash("data"))
     end
     assert_equal "storage is not configured", error.message
   end
 
   def test_local_file_middleware_serves_safe_images_and_forces_other_types_to_download
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
     image = storage.store(
       upload_hash("png", filename: "image.png", type: "image/png"),
       key: "images/image.png"
@@ -207,7 +207,7 @@ class StorageTest < Minitest::Test
       upload_hash("<script>x</script>", filename: "page.html", type: "text/html"),
       key: "documents/page.html"
     )
-    app = Hacienda::Middleware::StorageFiles.new(
+    app = Lunula::Middleware::StorageFiles.new(
       ->(_env) { [418, {}, ["fallback"]] },
       storage:
     )
@@ -232,8 +232,8 @@ class StorageTest < Minitest::Test
   end
 
   def test_local_file_middleware_rejects_traversal_and_ignores_other_requests
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
-    app = Hacienda::Middleware::StorageFiles.new(
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
+    app = Lunula::Middleware::StorageFiles.new(
       ->(_env) { [418, {}, ["fallback"]] },
       storage:
     )
@@ -246,7 +246,7 @@ class StorageTest < Minitest::Test
   end
 
   def test_real_multipart_request_can_be_stored_without_controller_plumbing
-    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    storage = Lunula::Storage.new(service: Lunula::Storage::MemoryService.new)
     app = lambda do |env|
       upload = Rack::Request.new(env).params.fetch("file")
       blob = storage.store(upload, content_types: ["text/plain"])
@@ -274,7 +274,7 @@ class StorageTest < Minitest::Test
   end
 
   def temporary_file(content)
-    Tempfile.new("hacienda-upload").tap do |file|
+    Tempfile.new("lunula-upload").tap do |file|
       file.binmode
       file.write(content)
       file.rewind

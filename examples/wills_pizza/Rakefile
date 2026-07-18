@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 APP_ROOT = File.expand_path(__dir__) unless defined?(APP_ROOT)
-require "hacienda"
+require "lunula"
 require "rake/testtask"
 require "sequel"
 require "sequel/extensions/migration"
@@ -33,13 +33,13 @@ end
 namespace :assets do
   desc "Compile fingerprinted production assets"
   task :precompile do
-    manifest = Hacienda::Assets.precompile(root: APP_ROOT)
+    manifest = Lunula::Assets.precompile(root: APP_ROOT)
     puts "Compiled #{manifest.fetch("assets").length} assets."
   end
 
   desc "Remove fingerprinted production assets"
   task :clobber do
-    count = Hacienda::Assets.clobber(root: APP_ROOT)
+    count = Lunula::Assets.clobber(root: APP_ROOT)
     puts "Removed #{count} compiled assets and the asset manifest."
   end
 end

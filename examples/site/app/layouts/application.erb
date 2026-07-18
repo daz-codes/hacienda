@@ -5,35 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><%= document_title %></title>
     <%= stylesheet_link "application.css" %>
-    <%= hacienda_navigation context %>
+    <%= morpheus_navigation context %>
     <%= javascript_include "helium-csp.js", module: true %>
   </head>
   <body data-helium @data="{ showFiles: false }">
     <div class="hazard-stripe hazard-stripe-top" aria-hidden="true"></div>
     <header class="site-header">
-      <%= link "Haçienda", "/", class: "brand" %>
-      <span class="catalogue-number">FAC 51 / WEB</span>
+      <%= link "Lunula", "/", class: "brand" %>
+      <span class="catalogue-number">LUNA 01 / WEB</span>
       <nav class="site-nav" aria-label="Primary navigation">
-        <%= link "Why Haçienda", "/#why" %>
-        <%= link "Quick start", "/guides/blog", data_hacienda_active_prefix: "/guides/blog" %>
-        <%= link "Helium", "/guides/helium", data_hacienda_active_prefix: "/guides/helium" %>
-        <%= link "Store guide", "/guides/store", data_hacienda_active_prefix: "/guides/store" %>
-        <a href="https://github.com/hacienda-rb/hacienda">Source</a>
+        <%= link "Why Lunula", "/#why" %>
+        <%= link "Quick start", "/guides/blog", data_lunula_active_prefix: "/guides/blog" %>
+        <%= link "Helium", "/guides/helium", data_lunula_active_prefix: "/guides/helium" %>
+        <%= link "Store guide", "/guides/store", data_lunula_active_prefix: "/guides/store" %>
+        <a href="https://github.com/daz-codes/lunula">Source</a>
       </nav>
     </header>
     <%= navigation_page content, context: context %>
     <footer class="site-footer">
       <div>
-        <strong>Haçienda</strong>
+        <strong>Lunula</strong>
         <p>Domain-oriented Ruby web applications, without the hidden machinery.</p>
       </div>
       <div class="footer-links">
         <%= link "10-minute blog", "/guides/blog" %>
         <%= link "Helium cookbook", "/guides/helium" %>
         <%= link "Full store guide", "/guides/store" %>
-        <a href="https://github.com/hacienda-rb/hacienda">GitHub</a>
+        <a href="https://github.com/daz-codes/lunula">GitHub</a>
       </div>
-      <span class="footer-mark">FAC 51</span>
+      <span class="footer-mark">LUNA 01</span>
     </footer>
     <div class="hazard-stripe hazard-stripe-bottom" aria-hidden="true"></div>
   </body>

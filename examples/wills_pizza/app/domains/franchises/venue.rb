@@ -2,8 +2,8 @@
 
 module Franchises
   class Venue
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
 
     BOOLEAN = ->(value) { value == true || %w[1 true on yes].include?(value.to_s.downcase) }
 

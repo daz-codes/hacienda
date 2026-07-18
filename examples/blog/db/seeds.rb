@@ -18,7 +18,7 @@ unless Posts::Repository.dataset.where(title: "Welcome to Field Notes").any?
     body: <<~TEXT.strip,
       This post was created through the same domain API used by the web actions.
 
-      Hacienda keeps HTTP translation, business behavior, and persistence
+      Lunula keeps HTTP translation, business behavior, and persistence
       explicit while allowing them to read together as ordinary Ruby.
     TEXT
     author_id: author.id

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "hacienda"
+require "lunula"
 
 APP_ROOT = File.expand_path("..", __dir__) unless defined?(APP_ROOT)
-Hacienda.root = APP_ROOT
+Lunula.root = APP_ROOT
 require_relative "environment"
 require_relative "database"
 require_relative "cache"
@@ -11,23 +11,23 @@ require_relative "storage"
 require_relative "jobs"
 require_relative "mail"
 
-event_delivery = ENV.fetch("HACIENDA_EVENT_OUTBOX", Hacienda.env.production? ? "database" : "inline")
+event_delivery = ENV.fetch("LUNULA_EVENT_OUTBOX", Lunula.env.production? ? "database" : "inline")
 event_outbox = case event_delivery
-when "database" then Hacienda::Events::Outbox.new(database: DB)
+when "database" then Lunula::Events::Outbox.new(database: DB)
 when "inline" then nil
-else raise "unknown HACIENDA_EVENT_OUTBOX; use database or inline"
+else raise "unknown LUNULA_EVENT_OUTBOX; use database or inline"
 end
 
-APP = Hacienda::Application.new(
+APP = Lunula::Application.new(
   root: APP_ROOT,
   title: "Field Notes",
-  reload: Hacienda.reload,
+  reload: Lunula.reload,
   context_loaders: ["Auth::LoadCurrentUser"],
   database: DB,
   outbox: event_outbox,
-  job_outbox: Hacienda.job_outbox,
-  cache: Hacienda.cache,
-  storage: Hacienda.storage,
+  job_outbox: Lunula.job_outbox,
+  cache: Lunula.cache,
+  storage: Lunula.storage,
   navigation: true
 )
 

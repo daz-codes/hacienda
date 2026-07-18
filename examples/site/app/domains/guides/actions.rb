@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Guides
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def blog(_context, _params)
       Samples::Blog.locals
     end

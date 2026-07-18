@@ -2,8 +2,8 @@
 
 module Products
   class Product
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
     include Imageable
     include InventoryNotifications
 

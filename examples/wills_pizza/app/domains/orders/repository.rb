@@ -2,13 +2,13 @@
 
 module Orders
   module Repository
-    STORE = Hacienda::Store.new(database: APP.database, table: :orders, record: Order)
+    extend Lunula::Repository
 
-    module_function
+    store database: APP.database, table: :orders, record: Order
 
     def save(order)
-      STORE.save(order)
-      APP.database[:order_items].multi_insert(
+      super
+      database[:order_items].multi_insert(
         order.line_items.map do |item|
           {
             order_id: order.id,
@@ -23,9 +23,9 @@ module Orders
     end
 
     def find_by_token(token)
-      order = STORE.first(STORE.dataset.where(public_token: token.to_s)) || raise(Hacienda::NotFound)
+      order = find_by!(public_token: token.to_s)
       order.tap do |loaded_order|
-        order.line_items = APP.database[:order_items]
+        order.line_items = database[:order_items]
           .where(order_id: loaded_order.id)
           .order(:id)
           .all

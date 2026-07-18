@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Todos
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def index(context, _params)
       IndexPage.new(filter: filter_for(context.path)).locals
     end

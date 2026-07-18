@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require "hacienda/cli"
-require "hacienda/generator"
+require "lunula/cli"
+require "lunula/generator"
 require "rubygems"
 require "stringio"
 require "yaml"
@@ -17,7 +17,7 @@ class PublicAPIContractTest < Minitest::Test
 
   def test_manifest_matches_framework_version
     assert_equal 1, @manifest.fetch("schema")
-    assert_equal Hacienda::VERSION, @manifest.fetch("framework_version")
+    assert_equal Lunula::VERSION, @manifest.fetch("framework_version")
   end
 
   def test_documented_ruby_api_exists_and_is_public
@@ -39,22 +39,22 @@ class PublicAPIContractTest < Minitest::Test
   end
 
   def test_cli_executables_and_commands_are_present
-    specification = Gem::Specification.load(File.join(ROOT, "hacienda.gemspec"))
+    specification = Gem::Specification.load(File.join(ROOT, "lunula.gemspec"))
     expected_executables = @manifest.dig("cli", "executables")
     assert_equal expected_executables.sort, specification.executables.sort
     expected_executables.each { |name| assert_path_exists File.join(ROOT, "exe", name) }
 
     output = StringIO.new
-    assert_equal 0, Hacienda::CLI.start(["help"], out: output, err: StringIO.new)
+    assert_equal 0, Lunula::CLI.start(["help"], out: output, err: StringIO.new)
     @manifest.dig("cli", "commands").each do |command|
-      assert_includes output.string, "hac #{command}"
+      assert_includes output.string, "luna #{command}"
     end
   end
 
   def test_generated_application_file_contract_is_exact
-    Dir.mktmpdir("hacienda-public-api") do |directory|
+    Dir.mktmpdir("lunula-public-api") do |directory|
       target = File.join(directory, "application")
-      Hacienda::Generator.new(target:, source_root: ROOT, cwd: directory).new_app
+      Lunula::Generator.new(target:, source_root: ROOT, cwd: directory).new_app
       actual = Dir.glob(File.join(target, "**", "*"), File::FNM_DOTMATCH)
         .reject { |path| File.directory?(path) || %w[. ..].include?(File.basename(path)) }
         .map { |path| path.delete_prefix("#{target}/") }
@@ -67,7 +67,7 @@ class PublicAPIContractTest < Minitest::Test
   def test_environment_protocol_and_persistence_names_remain_present
     source = Dir[File.join(ROOT, "lib", "**", "*.rb")].sort.map { |path| File.read(path) }.join("\n")
     snapshots = Dir[File.join(ROOT, "test", "snapshots", "*.snap")].sort.map { |path| File.read(path) }.join("\n")
-    navigation = File.read(File.join(ROOT, "lib", "hacienda", "assets", "hacienda-navigation.js"))
+    navigation = File.read(File.join(ROOT, "lib", "lunula", "assets", "morpheus.js"))
 
     @manifest.fetch("environment_variables").each do |name|
       assert_includes source, name, "#{name} must remain represented in framework or generated configuration"
@@ -78,34 +78,34 @@ class PublicAPIContractTest < Minitest::Test
     @manifest.dig("persistence", "payload_keys").each do |name|
       assert_includes source, name, "#{name} must remain represented in durable serialization"
     end
-    @manifest.dig("navigation_protocol", "headers").each do |name|
+    @manifest.dig("browser_protocol", "headers").each do |name|
       assert_includes navigation.downcase, name.downcase
     end
-    @manifest.dig("navigation_protocol", "events").each do |name|
+    @manifest.dig("browser_protocol", "events").each do |name|
       assert_includes navigation, name
     end
-    @manifest.dig("navigation_protocol", "attributes").each do |name|
+    @manifest.dig("browser_protocol", "attributes").each do |name|
       assert_includes navigation, name
     end
-    @manifest.dig("navigation_protocol", "paths").each do |name|
+    @manifest.fetch("development_endpoints").each do |name|
       assert_includes source, name
     end
   end
 
   def test_release_documentation_and_gem_metadata_are_present
     changelog = File.read(File.join(ROOT, "CHANGELOG.md"))
-    assert_includes changelog, "## [#{Hacienda::VERSION}]"
+    assert_includes changelog, "## [#{Lunula::VERSION}]"
 
     %w[public-api.md upgrading.md support.md generated-diffs/README.md].each do |path|
       assert_path_exists File.join(ROOT, "docs", path)
     end
 
-    specification = Gem::Specification.load(File.join(ROOT, "hacienda.gemspec"))
+    specification = Gem::Specification.load(File.join(ROOT, "lunula.gemspec"))
     assert_equal "true", specification.metadata.fetch("rubygems_mfa_required")
     assert_includes specification.files, "CHANGELOG.md"
 
-    if Hacienda::VERSION.match?(/\.rc\d+\z/)
-      assert_path_exists File.join(ROOT, "docs", "generated-diffs", "#{Hacienda::VERSION}.md")
+    if Lunula::VERSION.match?(/\.rc\d+\z/)
+      assert_path_exists File.join(ROOT, "docs", "generated-diffs", "#{Lunula::VERSION}.md")
     end
   end
 

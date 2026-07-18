@@ -25,8 +25,8 @@ class RecurringJobsTest < Minitest::Test
     @now = Time.utc(2026, 7, 5, 12, 34, 56)
     @database = Sequel.sqlite
     create_jobs_table
-    @adapter = Hacienda::Jobs::Adapters::Database.new(database: @database, clock: -> { @now })
-    @schedule_file = Tempfile.new(["hacienda-recurring", ".yml"])
+    @adapter = Lunula::Jobs::Adapters::Database.new(database: @database, clock: -> { @now })
+    @schedule_file = Tempfile.new(["lunula-recurring", ".yml"])
     RecurringRecorderJob.clear
   end
 
@@ -50,7 +50,7 @@ class RecurringJobsTest < Minitest::Test
             label: "recurring"
     YAML
 
-    schedule = Hacienda::Jobs::RecurringSchedule.load(@schedule_file.path)
+    schedule = Lunula::Jobs::RecurringSchedule.load(@schedule_file.path)
     entry = schedule.entries.fetch(0)
 
     assert_equal "heartbeat", entry.name
@@ -82,10 +82,10 @@ class RecurringJobsTest < Minitest::Test
     assert_equal 1, first.length
     assert_empty duplicate
     assert_equal 1, second.length
-    assert_equal 2, @database[:hacienda_recurring_runs].count
-    assert_equal 2, @database[:hacienda_jobs].count
+    assert_equal 2, @database[:lunula_recurring_runs].count
+    assert_equal 2, @database[:lunula_jobs].count
     assert_equal ["12:34", "12:35"],
-      @database[:hacienda_recurring_runs].order(:scheduled_at).select_map(:scheduled_at).map { |time| time.strftime("%H:%M") }
+      @database[:lunula_recurring_runs].order(:scheduled_at).select_map(:scheduled_at).map { |time| time.strftime("%H:%M") }
   end
 
   def test_scheduler_skips_disabled_tasks_and_can_trigger_manually
@@ -102,8 +102,8 @@ class RecurringJobsTest < Minitest::Test
     result = scheduler.trigger("disabled")
 
     assert_equal "disabled", result.entry.name
-    assert_equal 1, @database[:hacienda_recurring_runs].count
-    assert @database[:hacienda_recurring_runs].first.fetch(:manual)
+    assert_equal 1, @database[:lunula_recurring_runs].count
+    assert @database[:lunula_recurring_runs].first.fetch(:manual)
   end
 
   def test_schedule_can_toggle_enabled_in_yaml
@@ -115,16 +115,16 @@ class RecurringJobsTest < Minitest::Test
           enabled: false
     YAML
 
-    Hacienda::Jobs::RecurringSchedule.set_enabled(@schedule_file.path, "cleanup", true)
+    Lunula::Jobs::RecurringSchedule.set_enabled(@schedule_file.path, "cleanup", true)
 
-    schedule = Hacienda::Jobs::RecurringSchedule.load(@schedule_file.path)
+    schedule = Lunula::Jobs::RecurringSchedule.load(@schedule_file.path)
     assert schedule.find("cleanup").enabled
   end
 
   private
 
   def scheduler_for_file
-    Hacienda::Jobs::RecurringScheduler.new(
+    Lunula::Jobs::RecurringScheduler.new(
       database: @database,
       adapter: @adapter,
       path: @schedule_file.path,
@@ -141,7 +141,7 @@ class RecurringJobsTest < Minitest::Test
   end
 
   def create_jobs_table
-    @database.create_table(:hacienda_jobs) do
+    @database.create_table(:lunula_jobs) do
       primary_key :id
       String :queue, null: false
       Integer :priority, null: false, default: 0
@@ -170,14 +170,14 @@ class RecurringJobsTest < Minitest::Test
       DateTime :updated_at, null: false
     end
 
-    @database.create_table(:hacienda_recurring_runs) do
+    @database.create_table(:lunula_recurring_runs) do
       primary_key :id
       String :task_name, null: false
       DateTime :scheduled_at, null: false
       TrueClass :manual, null: false, default: false
       Integer :enqueued_job_id
       DateTime :created_at, null: false
-      unique [:task_name, :scheduled_at], name: :hacienda_recurring_runs_unique
+      unique [:task_name, :scheduled_at], name: :lunula_recurring_runs_unique
     end
   end
 end

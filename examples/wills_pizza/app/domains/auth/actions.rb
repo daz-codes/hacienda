@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Auth
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def login(_context, _params)
       {email: "", error: nil}
     end

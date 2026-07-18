@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+
+root = File.expand_path("..", __dir__)
+source = File.join(root, "packages", "morpheus")
+destinations = [
+  File.join(root, "lib", "lunula", "assets"),
+  *Dir.glob(File.join(root, "examples", "*", "public", "assets"))
+]
+files = {
+  File.join("src", "morpheus.js") => "morpheus.js",
+  File.join("src", "idiomorph.esm.js") => "idiomorph.esm.js",
+  "LICENSE" => "MORPHEUS-LICENSE.txt",
+  "IDIOMORPH-LICENSE.txt" => "IDIOMORPH-LICENSE.txt"
+}
+
+if ARGV == ["--check"]
+  stale = destinations.product(files.to_a).filter_map do |destination, (input, output)|
+    source_path = File.join(source, input)
+    destination_path = File.join(destination, output)
+    destination_path unless File.file?(destination_path) && File.binread(destination_path) == File.binread(source_path)
+  end
+  abort "Vendored Morpheus assets are stale:\n#{stale.join("\n")}" unless stale.empty?
+
+  puts "Vendored Morpheus assets are current."
+  exit 0
+end
+
+abort "usage: ruby script/vendor_morpheus [--check]" unless ARGV.empty?
+
+destinations.each do |destination|
+  FileUtils.mkdir_p(destination)
+  files.each do |input, output|
+    FileUtils.cp(File.join(source, input), File.join(destination, output))
+  end
+end
+
+puts "Vendored Morpheus into Lunula and #{destinations.length - 1} example applications."

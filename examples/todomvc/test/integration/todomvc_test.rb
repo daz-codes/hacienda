@@ -12,7 +12,7 @@ require "fileutils"
 
 TODOMVC_ROOT = File.expand_path("../..", __dir__)
 test_database_directory = unless ENV["DATABASE_URL"]
-  Dir.mktmpdir("hacienda-todomvc-test").tap do |directory|
+  Dir.mktmpdir("lunula-todomvc-test").tap do |directory|
     ENV["DATABASE_URL"] = "sqlite://#{File.join(directory, "test.sqlite3")}"
   end
 end
@@ -40,7 +40,7 @@ class TodoMVCTest < Minitest::Test
   def test_user_can_create_toggle_rename_and_clear_todos
     get "/"
     assert_equal 200, last_response.status
-    assert_includes last_response.body, "Hacienda + Helium"
+    assert_includes last_response.body, "Lunula + Helium"
 
     post "/todos", {_csrf: csrf_token, title: "Write a TodoMVC clone"}
     assert_equal 303, last_response.status

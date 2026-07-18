@@ -1,6 +1,6 @@
 # Will's Pizza
 
-A small Hacienda application for a Ruby meetup workshop. Customers can browse
+A small Lunula application for a Ruby meetup workshop. Customers can browse
 the public menu and place an order. A signed-in member of staff can add and edit
 pizzas.
 
@@ -10,9 +10,9 @@ From this directory:
 
 ```sh
 bundle install
-bundle exec hac db:migrate
-bundle exec hac db:seed
-bundle exec hac start
+bundle exec luna db:migrate
+bundle exec luna db:seed
+bundle exec luna start
 ```
 
 Open <http://localhost:5151>. The seed account is:

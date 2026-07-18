@@ -67,20 +67,20 @@ class TransactionJobsTest < Minitest::Test
   end
 
   def setup
-    @root = Dir.mktmpdir("hacienda-transaction-jobs")
+    @root = Dir.mktmpdir("lunula-transaction-jobs")
     FileUtils.mkdir_p(File.join(@root, "app", "domains"))
     @now = Time.utc(2026, 7, 2, 12)
     @database = Sequel.sqlite
     create_tables
-    Hacienda.clear_enqueued_jobs
+    Lunula.clear_enqueued_jobs
   end
 
   def teardown
     @app&.loader&.unload
     @app&.loader&.unregister
     @database.disconnect
-    Hacienda.configure_jobs(adapter: :inline, outbox: nil)
-    Hacienda.clear_enqueued_jobs
+    Lunula.configure_jobs(adapter: :inline, outbox: nil)
+    Lunula.clear_enqueued_jobs
     FileUtils.rm_rf(@root)
   end
 
@@ -92,11 +92,11 @@ class TransactionJobsTest < Minitest::Test
       @database[:records].insert(value: "committed")
       assert_equal ExampleJob, transaction.enqueue(ExampleJob, 7, label: "direct")
       assert_equal :transaction, transaction.enqueued_jobs.first.delivery
-      assert_equal 1, @database[:hacienda_jobs].count
+      assert_equal 1, @database[:lunula_jobs].count
     end
 
-    row = @database[:hacienda_jobs].first
-    args, kwargs = Hacienda::Jobs::Serializer.load(row.fetch(:payload))
+    row = @database[:lunula_jobs].first
+    args, kwargs = Lunula::Jobs::Serializer.load(row.fetch(:payload))
     assert_equal [7], args
     assert_equal({label: "direct"}, kwargs)
     assert_equal "imports", row.fetch(:queue)
@@ -112,7 +112,7 @@ class TransactionJobsTest < Minitest::Test
     end
 
     assert_empty @database[:records]
-    assert_empty @database[:hacienda_jobs]
+    assert_empty @database[:lunula_jobs]
   end
 
   def test_database_adapter_bulk_enqueue_participates_in_the_business_transaction
@@ -128,11 +128,11 @@ class TransactionJobsTest < Minitest::Test
       assert_equal 2, ids.length
       assert_equal ids, callback_ids
       assert_equal 2, transaction.enqueued_jobs.length
-      assert_equal 2, @database[:hacienda_jobs].count
+      assert_equal 2, @database[:lunula_jobs].count
     end
 
-    assert_equal ["imports"], @database[:hacienda_jobs].select_map(:queue).uniq
-    assert_equal 2, @database[:hacienda_jobs].count
+    assert_equal ["imports"], @database[:lunula_jobs].select_map(:queue).uniq
+    assert_equal 2, @database[:lunula_jobs].count
   end
 
   def test_database_adapter_respects_nested_savepoint_rollback
@@ -146,40 +146,40 @@ class TransactionJobsTest < Minitest::Test
       outer.enqueue(ExampleJob, 2, label: "outer")
     end
 
-    assert_equal 1, @database[:hacienda_jobs].count
-    args, = Hacienda::Jobs::Serializer.load(@database[:hacienda_jobs].get(:payload))
+    assert_equal 1, @database[:lunula_jobs].count
+    args, = Lunula::Jobs::Serializer.load(@database[:lunula_jobs].get(:payload))
     assert_equal [2], args
   end
 
   def test_nondurable_adapter_enqueues_only_after_commit
-    app_for(adapter: Hacienda::Jobs::Adapters::Test)
+    app_for(adapter: Lunula::Jobs::Adapters::Test)
 
     @app.transaction do |transaction|
       transaction.enqueue(ExampleJob, 3, label: "after")
-      assert_empty Hacienda.enqueued_jobs
+      assert_empty Lunula.enqueued_jobs
       assert_equal :after_commit, transaction.enqueued_jobs.first.delivery
     end
 
-    assert_equal 1, Hacienda.enqueued_jobs.length
-    assert_equal [3], Hacienda.enqueued_jobs.first.fetch(:args)
+    assert_equal 1, Lunula.enqueued_jobs.length
+    assert_equal [3], Lunula.enqueued_jobs.first.fetch(:args)
   end
 
   def test_nondurable_adapter_does_not_enqueue_after_rollback
-    app_for(adapter: Hacienda::Jobs::Adapters::Test)
+    app_for(adapter: Lunula::Jobs::Adapters::Test)
 
     @app.transaction do |transaction|
       transaction.enqueue(ExampleJob, 3, label: "rollback")
       raise Sequel::Rollback
     end
 
-    assert_empty Hacienda.enqueued_jobs
+    assert_empty Lunula.enqueued_jobs
   end
 
   def test_unsupported_scheduling_is_rejected_before_commit
     adapter = ImmediateAdapter.new
     app_for(adapter:)
 
-    error = assert_raises(Hacienda::Jobs::Error) do
+    error = assert_raises(Lunula::Jobs::Error) do
       @app.transaction do |transaction|
         @database[:records].insert(value: "must roll back")
         transaction.enqueue_at(@now + 60, ExampleJob, 3, label: "unsupported")
@@ -199,14 +199,14 @@ class TransactionJobsTest < Minitest::Test
     @app.transaction do |transaction|
       transaction.enqueue(ExampleJob, 4, label: "external")
       assert_equal :outbox, transaction.enqueued_jobs.first.delivery
-      assert_equal 1, @database[:hacienda_job_outbox].count
+      assert_equal 1, @database[:lunula_job_outbox].count
       assert_empty adapter.calls
     end
 
     execution = outbox.dispatch_once(adapter:)
 
     assert_equal :succeeded, execution.status
-    assert_empty @database[:hacienda_job_outbox]
+    assert_empty @database[:lunula_job_outbox]
     call = adapter.calls.fetch(0)
     assert_equal ExampleJob, call.fetch(:job)
     assert_equal [4], call.fetch(:args)
@@ -224,7 +224,7 @@ class TransactionJobsTest < Minitest::Test
       transaction.enqueue_at(@now + 90, PriorityJob, 14)
     end
 
-    row = @database[:hacienda_job_outbox].first
+    row = @database[:lunula_job_outbox].first
     assert_equal(-20, row.fetch(:priority))
     assert_equal(
       (@now + 90).strftime("%Y-%m-%d %H:%M:%S"),
@@ -248,7 +248,7 @@ class TransactionJobsTest < Minitest::Test
       raise Sequel::Rollback
     end
 
-    assert_empty @database[:hacienda_job_outbox]
+    assert_empty @database[:lunula_job_outbox]
     assert_empty adapter.calls
   end
 
@@ -265,28 +265,28 @@ class TransactionJobsTest < Minitest::Test
       outer.enqueue(ExampleJob, 11, label: "outer")
     end
 
-    assert_equal 1, @database[:hacienda_job_outbox].count
-    args, = Hacienda::Jobs::Serializer.load(@database[:hacienda_job_outbox].get(:payload))
+    assert_equal 1, @database[:lunula_job_outbox].count
+    args, = Lunula::Jobs::Serializer.load(@database[:lunula_job_outbox].get(:payload))
     assert_equal [11], args
   end
 
   def test_plain_enqueue_remains_independent_of_the_open_transaction
-    app_for(adapter: Hacienda::Jobs::Adapters::Test)
+    app_for(adapter: Lunula::Jobs::Adapters::Test)
 
     @app.transaction do
-      Hacienda.enqueue(ExampleJob, 12, label: "independent")
+      Lunula.enqueue(ExampleJob, 12, label: "independent")
       raise Sequel::Rollback
     end
 
-    assert_equal 1, Hacienda.enqueued_jobs.length
-    assert_equal [12], Hacienda.enqueued_jobs.first.fetch(:args)
+    assert_equal 1, Lunula.enqueued_jobs.length
+    assert_equal [12], Lunula.enqueued_jobs.first.fetch(:args)
   end
 
   def test_external_adapter_requires_a_transactional_outbox
     adapter = ExternalAdapter.new
     app_for(adapter:)
 
-    error = assert_raises(Hacienda::Jobs::OutboxError) do
+    error = assert_raises(Lunula::Jobs::OutboxError) do
       @app.transaction do |transaction|
         transaction.enqueue(ExampleJob, 6, label: "unsafe")
       end
@@ -304,14 +304,14 @@ class TransactionJobsTest < Minitest::Test
     first = outbox.dispatch_once(adapter:)
     assert_equal :retrying, first.status
     first_key = adapter.calls.fetch(0).fetch(:idempotency_key)
-    assert_equal 1, @database[:hacienda_job_outbox].get(:attempts)
+    assert_equal 1, @database[:lunula_job_outbox].get(:attempts)
 
     @now += 1
     second = outbox.dispatch_once(adapter:)
 
     assert_equal :succeeded, second.status
     assert_equal first_key, adapter.calls.fetch(1).fetch(:idempotency_key)
-    assert_empty @database[:hacienda_job_outbox]
+    assert_empty @database[:lunula_job_outbox]
   end
 
   def test_worker_relays_external_handoffs
@@ -319,14 +319,14 @@ class TransactionJobsTest < Minitest::Test
     outbox = job_outbox
     app_for(adapter:, outbox:)
     @app.transaction { |transaction| transaction.enqueue(ExampleJob, 9, label: "worker") }
-    worker = Hacienda::Jobs::Worker.new(adapter:, job_outbox: outbox, poll_interval: 0)
+    worker = Lunula::Jobs::Worker.new(adapter:, job_outbox: outbox, poll_interval: 0)
 
     result = worker.work_once
 
     assert_nil result.jobs
     assert_equal :succeeded, result.handoffs.status
     assert_nil result.events
-    assert_empty @database[:hacienda_job_outbox]
+    assert_empty @database[:lunula_job_outbox]
   end
 
   def test_terminal_handoff_failures_are_visible_and_retryable
@@ -350,11 +350,11 @@ class TransactionJobsTest < Minitest::Test
   def test_application_rejects_a_job_outbox_on_another_database
     adapter = ExternalAdapter.new
     other_database = Sequel.sqlite
-    other_outbox = Hacienda::Jobs::Outbox.new(database: other_database)
-    Hacienda.configure_jobs(adapter:)
+    other_outbox = Lunula::Jobs::Outbox.new(database: other_database)
+    Lunula.configure_jobs(adapter:)
 
     error = assert_raises(ArgumentError) do
-      Hacienda::Application.new(
+      Lunula::Application.new(
         root: @root,
         database: @database,
         job_outbox: other_outbox
@@ -369,8 +369,8 @@ class TransactionJobsTest < Minitest::Test
   private
 
   def app_for(adapter:, outbox: nil)
-    Hacienda.configure_jobs(adapter:, outbox:)
-    @app = Hacienda::Application.new(
+    Lunula.configure_jobs(adapter:, outbox:)
+    @app = Lunula::Application.new(
       root: @root,
       database: @database,
       job_outbox: outbox
@@ -378,7 +378,7 @@ class TransactionJobsTest < Minitest::Test
   end
 
   def database_adapter
-    Hacienda::Jobs::Adapters::Database.new(
+    Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 60,
       retry_delay: ->(_attempt) { 1 },
@@ -387,7 +387,7 @@ class TransactionJobsTest < Minitest::Test
   end
 
   def job_outbox(max_attempts: 10)
-    Hacienda::Jobs::Outbox.new(
+    Lunula::Jobs::Outbox.new(
       database: @database,
       max_attempts:,
       lease_seconds: 60,
@@ -401,7 +401,7 @@ class TransactionJobsTest < Minitest::Test
       primary_key :id
       String :value
     end
-    @database.create_table(:hacienda_jobs) do
+    @database.create_table(:lunula_jobs) do
       primary_key :id
       String :queue, null: false
       Integer :priority, null: false, default: 0
@@ -429,7 +429,7 @@ class TransactionJobsTest < Minitest::Test
       DateTime :created_at, null: false
       DateTime :updated_at, null: false
     end
-    @database.create_table(:hacienda_job_outbox) do
+    @database.create_table(:lunula_job_outbox) do
       primary_key :id
       String :handoff_id, null: false, unique: true
       String :queue, null: false
@@ -447,7 +447,7 @@ class TransactionJobsTest < Minitest::Test
       DateTime :created_at, null: false
       DateTime :updated_at, null: false
     end
-    @database.create_table(:hacienda_job_workers) do
+    @database.create_table(:lunula_job_workers) do
       String :id, primary_key: true
       Integer :process_id, null: false
       String :hostname, null: false

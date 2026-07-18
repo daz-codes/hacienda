@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-ENV["HACIENDA_ENV"] = "test"
+ENV["LUNULA_ENV"] = "test"
 ENV["RACK_ENV"] = "test"
 
 require "minitest/autorun"
@@ -13,7 +13,7 @@ require "fileutils"
 
 TEST_ROOT = File.expand_path("..", __dir__) unless defined?(TEST_ROOT)
 test_database_directory = unless ENV["DATABASE_URL"]
-  Dir.mktmpdir("hacienda-store-test").tap do |directory|
+  Dir.mktmpdir("lunula-store-test").tap do |directory|
     ENV["DATABASE_URL"] = "sqlite://#{File.join(directory, "test.sqlite3")}"
   end
 end

@@ -8,7 +8,7 @@ before using it.
 
 Install dependencies and commit `Gemfile.lock`; the Docker build is
 intentionally locked and will fail without it. The build also runs
-`hac assets:precompile`, so the final image contains fingerprinted
+`luna assets:precompile`, so the final image contains fingerprinted
 assets and the production manifest:
 
 ```sh
@@ -16,7 +16,7 @@ bundle install
 git add Gemfile.lock
 ```
 
-If Hacienda is referenced through a local `path:` in `Gemfile`, replace
+If Lunula is referenced through a local `path:` in `Gemfile`, replace
 it with a released gem version before building outside the framework
 checkout.
 
@@ -25,16 +25,16 @@ checkout.
 ```sh
 docker build -t wills-pizza .
 docker volume create wills-pizza_db
-export HACIENDA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
+export LUNULA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
 docker run --rm \
-  -e HACIENDA_MASTER_KEY="$(cat config/master.key)" \
-  -e HACIENDA_SESSION_SECRET \
+  -e LUNULA_MASTER_KEY="$(cat config/master.key)" \
+  -e LUNULA_SESSION_SECRET \
   -e DATABASE_URL=sqlite:///app/db/production.sqlite3 \
   -v wills-pizza_db:/app/db \
-  wills-pizza bundle exec hac db:migrate
+  wills-pizza bundle exec luna db:migrate
 docker run --rm -p 5151:5151 \
-  -e HACIENDA_MASTER_KEY="$(cat config/master.key)" \
-  -e HACIENDA_SESSION_SECRET \
+  -e LUNULA_MASTER_KEY="$(cat config/master.key)" \
+  -e LUNULA_SESSION_SECRET \
   -e DATABASE_URL=sqlite:///app/db/production.sqlite3 \
   -v wills-pizza_db:/app/db \
   wills-pizza
@@ -59,23 +59,23 @@ a domain whose DNS points to the server.
 
    ```sh
    export KAMAL_REGISTRY_PASSWORD="registry-access-token"
-   export HACIENDA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
+   export LUNULA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
    # During rotation only:
-   # export HACIENDA_SESSION_SECRET_OLD="previous-secret"
+   # export LUNULA_SESSION_SECRET_OLD="previous-secret"
    ```
 
 Sessions use encrypted client-side cookies by default. They expire
-after 30 days; set `HACIENDA_SESSION_EXPIRE_AFTER` to a positive number
-of seconds to change that. To rotate `HACIENDA_SESSION_SECRET`, deploy
+after 30 days; set `LUNULA_SESSION_EXPIRE_AFTER` to a positive number
+of seconds to change that. To rotate `LUNULA_SESSION_SECRET`, deploy
 the new value and keep the previous value in
-`HACIENDA_SESSION_SECRET_OLD` until old cookies have expired. Logout
+`LUNULA_SESSION_SECRET_OLD` until old cookies have expired. Logout
 removes the browser's current cookie, but a stolen copy remains
 replayable until expiry or secret rotation because the default store
 has no server-side revocation list.
 
-Set `HACIENDA_SESSION_STORE=database` to store session payloads in
+Set `LUNULA_SESSION_STORE=database` to store session payloads in
 Sequel instead. That keeps only an opaque id in the browser, uses the
-generated `hacienda_sessions` table, and allows server-side revocation
+generated `lunula_sessions` table, and allows server-side revocation
 by deleting rows. Run migrations before enabling it.
 
 3. Run the first deployment and migrate the database:
@@ -100,9 +100,9 @@ Generated apps configure SQLite with WAL mode, foreign-key enforcement,
 is a single-server configuration: keep web, worker, scheduler, SQLite,
 and local uploads on the same host and persistent volumes.
 
-Run `bundle exec hac db:check` after deployment to verify WAL,
+Run `bundle exec luna db:check` after deployment to verify WAL,
 busy-timeout, foreign keys, and storage-path assumptions. Run
-`bundle exec hac db:checkpoint --mode TRUNCATE` during maintenance if
+`bundle exec luna db:checkpoint --mode TRUNCATE` during maintenance if
 the WAL file grows unexpectedly after a burst of writes.
 
 Use an external PostgreSQL or MySQL database and update `DATABASE_URL`
@@ -122,18 +122,18 @@ uploads separately from SQLite.
 
 ## Jobs and event delivery
 
-Production uses Hacienda's durable database job adapter and the
+Production uses Lunula's durable database job adapter and the
 transactional event outbox. The generated `job` server role runs
-`hac jobs:work` on the same host and volume; that worker also relays
+`luna jobs:work` on the same host and volume; that worker also relays
 durable job hand-offs and event outbox deliveries. The generated
-`scheduler` role runs `hac jobs:schedule` for recurring tasks.
+`scheduler` role runs `luna jobs:schedule` for recurring tasks.
 Delivery is at least once, so jobs and event subscribers must be
 idempotent.
 
-Qualify the queue on the deployed host after `hac db:check`:
+Qualify the queue on the deployed host after `luna db:check`:
 
 ```sh
-bundle exec hac jobs:benchmark --jobs 1000 --retry-jobs 25 --web-requests 250 --web-path /up --outbox-items 100 --threads 2 --batch-size 10
+bundle exec luna jobs:benchmark --jobs 1000 --retry-jobs 25 --web-requests 250 --web-path /up --outbox-items 100 --threads 2 --batch-size 10
 ```
 
 The benchmark uses the real database job adapter, worker
@@ -146,14 +146,14 @@ worker process, `--threads 2`, `--batch-size 5..10`, and
 benchmark p95 database latency degrade under load.
 
 Inspect terminal failures with
-`kamal app exec --role job "bundle exec hac jobs:failed"` and check
+`kamal app exec --role job "bundle exec luna jobs:failed"` and check
 worker health with
-`kamal app exec --role job "bundle exec hac jobs:health"`.
+`kamal app exec --role job "bundle exec luna jobs:health"`.
 
-The mounted dashboard at `/hac/jobs` is read-only. In development it is
+The mounted dashboard at `/luna/jobs` is read-only. In development it is
 local-only. In production it returns forbidden unless
-`HACIENDA_DASHBOARD_PASSWORD` is set, in which case it uses HTTP Basic
-auth with username `hacienda` unless `HACIENDA_DASHBOARD_USERNAME` is
+`LUNULA_DASHBOARD_PASSWORD` is set, in which case it uses HTTP Basic
+auth with username `lunula` unless `LUNULA_DASHBOARD_USERNAME` is
 also set. Development local-only checks use the direct `REMOTE_ADDR`
 socket address, not forwarding headers.
 
@@ -162,7 +162,7 @@ the application sends mail.
 
 Production storage defaults to `NullService`. Configure an object-store
 adapter in `config/storage.rb`. If disk storage is deliberately used on
-one server, mount `HACIENDA_STORAGE_ROOT` as a separate persistent
+one server, mount `LUNULA_STORAGE_ROOT` as a separate persistent
 volume; do not bake uploaded files into the image.
 
 The local `/uploads` middleware serves public capability URLs without

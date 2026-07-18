@@ -3,7 +3,7 @@
 module Products
   class FeaturedImageUpload
     CONTENT_TYPES = %w[image/jpeg image/png image/webp image/avif].freeze
-    CONTENT_INSPECTOR = Hacienda::Storage::ContentTypeInspector.new
+    CONTENT_INSPECTOR = Lunula::Storage::ContentTypeInspector.new
 
     def initialize(storage:, upload:, product:)
       @storage = storage
@@ -12,7 +12,7 @@ module Products
     end
 
     def attach
-      return self unless Hacienda::Storage::Upload.present?(@upload)
+      return self unless Lunula::Storage::Upload.present?(@upload)
 
       @blob = @storage.store(
         @upload,
@@ -23,7 +23,7 @@ module Products
       )
       @product.attach_featured_image(@blob)
       self
-    rescue Hacienda::Storage::InvalidUpload => error
+    rescue Lunula::Storage::InvalidUpload => error
       @product.errors.add(:featured_image, error.message)
       self
     end

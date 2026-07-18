@@ -6,7 +6,7 @@ require "sequel/extensions/migration"
 
 class MigrationsTest < Minitest::Test
   def setup
-    @root = Dir.mktmpdir("hacienda-migrations")
+    @root = Dir.mktmpdir("lunula-migrations")
     @database = Sequel.sqlite
   end
 
@@ -19,27 +19,27 @@ class MigrationsTest < Minitest::Test
     first = write_migration("20260717090000_create_posts.rb", :posts)
     second = write_migration("20260717090100_create_comments.rb", :comments)
 
-    assert_equal [first, second], Hacienda::Migrations.pending(database: @database, directory: @root)
+    assert_equal [first, second], Lunula::Migrations.pending(database: @database, directory: @root)
 
     Sequel::TimestampMigrator.run_single(@database, first, direction: :up)
 
-    assert_equal [second], Hacienda::Migrations.pending(database: @database, directory: @root)
-    refute Hacienda::Migrations.current?(database: @database, directory: @root)
+    assert_equal [second], Lunula::Migrations.pending(database: @database, directory: @root)
+    refute Lunula::Migrations.current?(database: @database, directory: @root)
 
     Sequel::Migrator.run(@database, @root)
 
-    assert Hacienda::Migrations.current?(database: @database, directory: @root)
+    assert Lunula::Migrations.current?(database: @database, directory: @root)
   end
 
   def test_integer_migrations_report_versions_after_the_current_version
     first = write_migration("001_create_posts.rb", :posts)
     second = write_migration("002_create_comments.rb", :comments)
 
-    assert_equal [first, second], Hacienda::Migrations.pending(database: @database, directory: @root)
+    assert_equal [first, second], Lunula::Migrations.pending(database: @database, directory: @root)
 
     Sequel::Migrator.run(@database, @root, target: 1)
 
-    assert_equal [second], Hacienda::Migrations.pending(database: @database, directory: @root)
+    assert_equal [second], Lunula::Migrations.pending(database: @database, directory: @root)
   end
 
   def test_pending_migration_middleware_recovers_after_migrations_are_applied
@@ -47,7 +47,7 @@ class MigrationsTest < Minitest::Test
     now = 0.0
     calls = 0
     app = ->(_env) { calls += 1; [200, {"content-type" => "text/plain"}, ["Ready"]] }
-    middleware = Hacienda::Middleware::PendingMigrations.new(
+    middleware = Lunula::Middleware::PendingMigrations.new(
       app,
       database: @database,
       directory: @root,
@@ -61,7 +61,7 @@ class MigrationsTest < Minitest::Test
 
     assert_equal 503, response.status
     assert_includes response.body, File.basename(migration)
-    assert_includes response.body, "bundle exec hac db:migrate"
+    assert_includes response.body, "bundle exec luna db:migrate"
     assert_equal 0, calls
 
     Sequel::Migrator.run(@database, @root)
@@ -76,7 +76,7 @@ class MigrationsTest < Minitest::Test
 
   def test_pending_migration_middleware_does_not_leak_names_in_production
     migration = write_migration("20260717090000_create_secret_records.rb", :secret_records)
-    middleware = Hacienda::Middleware::PendingMigrations.new(
+    middleware = Lunula::Middleware::PendingMigrations.new(
       ->(_env) { flunk "pending request should not reach the application" },
       database: @database,
       directory: @root,

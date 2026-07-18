@@ -12,7 +12,7 @@ require "fileutils"
 
 WORKOUTS_ROOT = File.expand_path("../..", __dir__)
 test_database_directory = unless ENV["DATABASE_URL"]
-  Dir.mktmpdir("hacienda-workouts-test").tap do |directory|
+  Dir.mktmpdir("lunula-workouts-test").tap do |directory|
     ENV["DATABASE_URL"] = "sqlite://#{File.join(directory, "test.sqlite3")}"
   end
 end
@@ -46,7 +46,7 @@ class WorkoutsTest < Minitest::Test
   def test_generates_and_persists_a_structured_workout
     get "/workouts/new"
     assert_equal 200, last_response.status
-    assert_includes last_response.body, "Hacienda + OpenAI"
+    assert_includes last_response.body, "Lunula + OpenAI"
 
     post "/workouts", {
       _csrf: csrf_token,

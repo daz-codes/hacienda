@@ -1,8 +1,8 @@
-# Hacienda Supply
+# Lunula Supply
 
-This is the completed application from Hacienda’s Rails Guides-style store
+This is the completed application from Lunula’s Rails Guides-style store
 tutorial. It follows the current Rails 8.1 Getting Started store while using
-Hacienda’s domain-oriented structure and explicit Sequel persistence.
+Lunula’s domain-oriented structure and explicit Sequel persistence.
 
 Read the complete tutorial in
 [`docs/getting-started.md`](../../docs/getting-started.md).
@@ -11,9 +11,9 @@ Read the complete tutorial in
 
 ```sh
 bundle install
-bundle exec hac db:migrate
-bundle exec hac db:seed
-bundle exec hac start
+bundle exec luna db:migrate
+bundle exec luna db:seed
+bundle exec luna start
 ```
 
 Open <http://localhost:5151>. The seed creates:
@@ -28,13 +28,13 @@ demonstrates the after-commit event and queued notification email.
 Useful commands:
 
 ```sh
-bundle exec hac routes
-bundle exec hac console
+bundle exec luna routes
+bundle exec luna console
 bundle exec rake test
-bundle exec hac jobs:work
+bundle exec luna jobs:work
 ```
 
-The application intentionally uses plain text descriptions because Hacienda
+The application intentionally uses plain text descriptions because Lunula
 does not yet provide rich-text editing, and it keeps English text inline because
 i18n integration remains on the framework roadmap. Both gaps are identified in
 the tutorial.

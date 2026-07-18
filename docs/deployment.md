@@ -1,6 +1,6 @@
-# Deploying Hacienda applications
+# Deploying Lunula applications
 
-`hac new` generates a production `Dockerfile`, `.dockerignore`,
+`luna new` generates a production `Dockerfile`, `.dockerignore`,
 `config/deploy.yml`, `.kamal/secrets`, a `/up` health endpoint, and an
 application-specific `DEPLOYMENT.md`.
 
@@ -13,9 +13,9 @@ over the deployment platform.
 Before deploying, provide:
 
 - a committed `Gemfile.lock`;
-- `HACIENDA_MASTER_KEY`, or `HACIENDA_SECRET_KEY_BASE` if encrypted credentials
+- `LUNULA_MASTER_KEY`, or `LUNULA_SECRET_KEY_BASE` if encrypted credentials
   are not used;
-- a long random `HACIENDA_SESSION_SECRET`;
+- a long random `LUNULA_SESSION_SECRET`;
 - `DATABASE_URL` pointing to persistent storage;
 - SMTP configuration if the application sends mail.
 
@@ -29,12 +29,12 @@ Never bake `config/master.key`, session secrets, SMTP passwords, or database
 passwords into the image. The generated `.dockerignore` excludes the master key
 and local data.
 
-Set `HACIENDA_APP_URL` to the public canonical origin, for example
-`https://app.example.com`. Hacienda uses this value for generated email
+Set `LUNULA_APP_URL` to the public canonical origin, for example
+`https://app.example.com`. Lunula uses this value for generated email
 verification, password reset, magic-link-style flows, and other signed URLs
 instead of trusting the incoming request `Host` header. Generated production
-apps also use the host from `HACIENDA_APP_URL` as the default allowed host.
-Set `HACIENDA_ALLOWED_HOSTS` to a comma-separated list only when the app must
+apps also use the host from `LUNULA_APP_URL` as the default allowed host.
+Set `LUNULA_ALLOWED_HOSTS` to a comma-separated list only when the app must
 accept additional hostnames.
 
 Your reverse proxy should overwrite, not append to, untrusted `Host` and
@@ -43,42 +43,42 @@ shape; custom proxies should be configured with the same assumption.
 
 Generated Rack stacks bound bodies to 10 MiB, query strings to 64 KiB,
 multipart uploads to 16 files and 128 total parts, parameters to 1,024, and
-nesting to 16 levels. The `HACIENDA_MAX_REQUEST_BYTES`,
-`HACIENDA_MAX_QUERY_BYTES`, `HACIENDA_MAX_MULTIPART_FILES`,
-`HACIENDA_MAX_MULTIPART_PARTS`, `HACIENDA_MAX_PARAMETERS`, and
-`HACIENDA_MAX_PARAMETER_DEPTH` environment variables override those defaults.
+nesting to 16 levels. The `LUNULA_MAX_REQUEST_BYTES`,
+`LUNULA_MAX_QUERY_BYTES`, `LUNULA_MAX_MULTIPART_FILES`,
+`LUNULA_MAX_MULTIPART_PARTS`, `LUNULA_MAX_PARAMETERS`, and
+`LUNULA_MAX_PARAMETER_DEPTH` environment variables override those defaults.
 Configure the proxy with an equal or lower body limit and explicit request
 header/read timeouts so oversized and slow requests are rejected before they
-occupy a Rack worker. Hacienda cannot enforce a connection timeout from inside
+occupy a Rack worker. Lunula cannot enforce a connection timeout from inside
 the request middleware.
 
 ## Rotating secrets
 
-Rotate the credentials master key with `hac credentials:rotate`. It re-encrypts
+Rotate the credentials master key with `luna credentials:rotate`. It re-encrypts
 `config/credentials.yml.enc` with a fresh key and rewrites `config/master.key`;
-update any `HACIENDA_MASTER_KEY` copies in your deploy secrets afterwards.
+update any `LUNULA_MASTER_KEY` copies in your deploy secrets afterwards.
 
-To rotate `HACIENDA_SECRET_KEY_BASE` without invalidating outstanding signed
+To rotate `LUNULA_SECRET_KEY_BASE` without invalidating outstanding signed
 tokens (email verification and password reset links), keep the previous value
-in `HACIENDA_SECRET_KEY_BASE_OLD` (comma-separated for more than one) or in an
-`old_secret_key_bases` array under `hacienda:` in the encrypted credentials.
+in `LUNULA_SECRET_KEY_BASE_OLD` (comma-separated for more than one) or in an
+`old_secret_key_bases` array under `lunula:` in the encrypted credentials.
 New tokens are always signed with the current secret; old secrets are only
 used to verify. Drop them once outstanding tokens have expired.
 
-To rotate `HACIENDA_SESSION_SECRET`, deploy the new value as
-`HACIENDA_SESSION_SECRET` and keep the previous value in
-`HACIENDA_SESSION_SECRET_OLD` until existing cookies expire. Generated apps
+To rotate `LUNULA_SESSION_SECRET`, deploy the new value as
+`LUNULA_SESSION_SECRET` and keep the previous value in
+`LUNULA_SESSION_SECRET_OLD` until existing cookies expire. Generated apps
 accept a comma-separated list of old session secrets. Cookie sessions expire
-after 30 days by default; set `HACIENDA_SESSION_EXPIRE_AFTER` to a positive
+after 30 days by default; set `LUNULA_SESSION_EXPIRE_AFTER` to a positive
 number of seconds to shorten or lengthen that window.
 
 The default session store is an encrypted client-side cookie. It has no
 server-side revocation list: logout removes the browser's current cookie, but a
 stolen copy can still be replayed until it expires or the signing/encryption
 secret is rotated. Prefer shorter expiries for higher-risk applications. Set
-`HACIENDA_SESSION_STORE=database` when per-session revocation is required.
+`LUNULA_SESSION_STORE=database` when per-session revocation is required.
 
-If a development checkout references Hacienda with `gem "hacienda", path: ...`,
+If a development checkout references Lunula with `gem "lunula", path: ...`,
 replace it with a released gem version before building an image whose context
 does not include the framework checkout.
 
@@ -88,7 +88,7 @@ The generated image:
 
 - uses a multi-stage Ruby build;
 - installs only runtime SQLite libraries in the final stage;
-- runs as an unprivileged `hacienda` user;
+- runs as an unprivileged `lunula` user;
 - excludes development dependencies;
 - compiles fingerprinted assets and their production manifest;
 - starts Rack/Puma on port 5151;
@@ -100,18 +100,18 @@ Build and exercise it before deployment:
 bundle install
 docker build -t my-app .
 docker volume create my-app_db
-export HACIENDA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
+export LUNULA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
 
 docker run --rm \
-  -e HACIENDA_MASTER_KEY="$(cat config/master.key)" \
-  -e HACIENDA_SESSION_SECRET \
+  -e LUNULA_MASTER_KEY="$(cat config/master.key)" \
+  -e LUNULA_SESSION_SECRET \
   -e DATABASE_URL=sqlite:///app/db/production.sqlite3 \
   -v my-app_db:/app/db \
-  my-app bundle exec hac db:migrate
+  my-app bundle exec luna db:migrate
 
 docker run --rm -p 5151:5151 \
-  -e HACIENDA_MASTER_KEY="$(cat config/master.key)" \
-  -e HACIENDA_SESSION_SECRET \
+  -e LUNULA_MASTER_KEY="$(cat config/master.key)" \
+  -e LUNULA_SESSION_SECRET \
   -e DATABASE_URL=sqlite:///app/db/production.sqlite3 \
   -v my-app_db:/app/db \
   my-app
@@ -121,7 +121,7 @@ Check <http://localhost:5151/up>. The endpoint is a liveness check and does not
 query the database or external services.
 
 For deployments that do not use the generated Dockerfile, run
-`bundle exec hac assets:precompile` before starting the production process.
+`bundle exec luna assets:precompile` before starting the production process.
 Development continues to serve the readable source files in `public/assets`.
 
 ## Kamal
@@ -142,9 +142,9 @@ Export secrets referenced by `.kamal/secrets`:
 
 ```sh
 export KAMAL_REGISTRY_PASSWORD="registry-access-token"
-export HACIENDA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
+export LUNULA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
 # During rotation only:
-# export HACIENDA_SESSION_SECRET_OLD="previous-secret"
+# export LUNULA_SESSION_SECRET_OLD="previous-secret"
 ```
 
 The master key is read from `config/master.key` by the generated secrets file.
@@ -189,7 +189,7 @@ filesystems; file locking semantics are part of SQLite's correctness model.
 After deployment, verify the runtime database settings:
 
 ```sh
-bundle exec hac db:check
+bundle exec luna db:check
 ```
 
 The command reports the SQLite version, database path, WAL mode, busy-timeout,
@@ -200,7 +200,7 @@ If a write-heavy burst leaves a large WAL file after traffic settles, run an
 explicit checkpoint during a maintenance window:
 
 ```sh
-bundle exec hac db:checkpoint --mode TRUNCATE
+bundle exec luna db:checkpoint --mode TRUNCATE
 ```
 
 Use this as maintenance, not as a request-path operation.
@@ -256,12 +256,12 @@ outgrown this default and should move to an external database through Sequel.
 - Domain events dispatch in-process after commit. Critical eventual delivery
   needs an outbox or durable queue.
 - Run production background work as explicit processes: web handles requests,
-  `hac jobs:work` performs jobs and relays durable hand-offs/events, and
-  `hac jobs:schedule` enqueues recurring tasks. `hac jobs:health` and the
-  read-only `/hac/jobs/health` endpoint are intended for supervisor checks.
+  `luna jobs:work` performs jobs and relays durable hand-offs/events, and
+  `luna jobs:schedule` enqueues recurring tasks. `luna jobs:health` and the
+  read-only `/luna/jobs/health` endpoint are intended for supervisor checks.
 - Qualify the queue on the deployed host with
-  `hac jobs:benchmark --jobs 1000 --retry-jobs 25 --threads 2 --batch-size 10`
-  after `hac db:check`. The benchmark uses the real database job adapter,
+  `luna jobs:benchmark --jobs 1000 --retry-jobs 25 --threads 2 --batch-size 10`
+  after `luna db:check`. The benchmark uses the real database job adapter,
   worker claim/complete path, failed-job retry path, and simple database
   latency samples, then deletes only its own benchmark rows unless `--keep` is
   passed.
@@ -273,12 +273,12 @@ outgrown this default and should move to an external database through Sequel.
   user-visible SLA, frequent manual WAL checkpoints, or benchmark p95 database
   latency above roughly 100-250ms as signs that the application should reduce
   worker concurrency or move jobs to an external database through Sequel.
-- The `/hac/jobs` dashboard is local-only in development and requires
-  `HACIENDA_DASHBOARD_PASSWORD` for Basic auth in production.
+- The `/luna/jobs` dashboard is local-only in development and requires
+  `LUNULA_DASHBOARD_PASSWORD` for Basic auth in production.
 - The default rate-limit store is process-local. Use a shared store when an
   application runs in multiple processes or containers.
 - Production file storage defaults to `NullService`. Configure a remote
-  object-storage service, or deliberately mount `HACIENDA_STORAGE_ROOT` as a
+  object-storage service, or deliberately mount `LUNULA_STORAGE_ROOT` as a
   persistent volume for a single-server disk deployment. Local disk storage is
   not shared across hosts.
 - The generated blog's cover uploads therefore fail closed with `storage is not

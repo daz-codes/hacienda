@@ -10,8 +10,8 @@ end
 
 unless Products::Repository.dataset.any?
   Products::Repository.save Products::Product.new(
-    name: "Hacienda T-Shirt",
-    description: "Heavyweight organic cotton shirt with a small FAC 51 mark.",
+    name: "Lunula T-Shirt",
+    description: "Heavyweight organic cotton shirt with a small LUNA 01 mark.",
     inventory_count: 12
   )
 

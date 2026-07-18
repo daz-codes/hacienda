@@ -18,7 +18,7 @@
   }.to_json %>'
   @keydown.document.esc="editingId = null; editTitle = ''; showHelp = false; previewing = false"
   @keydown.document.ctrl.k.prevent="$newTodo.focus()"
-  @effect:remaining="document.title = remaining + ' left · Hacienda TodoMVC'"
+  @effect:remaining="document.title = remaining + ' left · Lunula TodoMVC'"
 >
   <span hidden @calculate:remaining="todos.filter(todo => !todo.completed).length"></span>
   <span hidden @calculate:completedCount="todos.filter(todo => todo.completed).length"></span>
@@ -27,7 +27,7 @@
   <span hidden @calculate:canCreate="draft.trim().length > 0"></span>
 
   <header class="header">
-    <p class="eyebrow">Hacienda + Helium</p>
+    <p class="eyebrow">Lunula + Helium</p>
     <h1>todos</h1>
     <p class="tagline">
       HTML-first persistence, client-side polish, no build step.
@@ -131,10 +131,10 @@
 
   <section class="empty-state" @visible="todos.length === 0">
     <h2>No todos yet.</h2>
-    <p>Add one above. Hacienda will persist it; Helium will keep the interface lively.</p>
+    <p>Add one above. Lunula will persist it; Helium will keep the interface lively.</p>
   </section>
 </section>
 
 <p class="info">
-  Built with Hacienda, Sequel, ERB, Rack, and a deliberately large amount of Helium.
+  Built with Lunula, Sequel, ERB, Rack, and a deliberately large amount of Helium.
 </p>

@@ -6,7 +6,7 @@ module Auth
 
     def load(context)
       user_id = context.session[:user_id]
-      context.current_user = Repository.find(user_id) if user_id
+      context.current_user = Repository.find_by(id: user_id) if user_id
     end
   end
 end

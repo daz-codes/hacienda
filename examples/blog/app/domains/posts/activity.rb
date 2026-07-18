@@ -15,7 +15,7 @@ module Posts
     end
 
     def record(name, event)
-      Hacienda.logger.info(
+      Lunula.logger.info(
         "domain_event name=#{name.inspect} " \
         "post_id=#{event.post_id.inspect} " \
         "author_id=#{event.author_id.inspect} " \

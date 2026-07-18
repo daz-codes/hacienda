@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
 mail_delivery = ENV.fetch(
-  "HACIENDA_MAIL_DELIVERY",
-  Hacienda.env.test? ? "test" : Hacienda.env.production? ? "smtp" : "file"
+  "LUNULA_MAIL_DELIVERY",
+  Lunula.env.test? ? "test" : Lunula.env.production? ? "smtp" : "file"
 )
-mail_credentials = File.file?(File.join(APP_ROOT, "config", "credentials.yml.enc")) ? Hacienda.credentials : {}
+mail_credentials = File.file?(File.join(APP_ROOT, "config", "credentials.yml.enc")) ? Lunula.credentials : {}
 
-Hacienda.configure_mail(
+Lunula.configure_mail(
   root: APP_ROOT,
   delivery: mail_delivery.to_sym,
-  from: ENV.fetch("HACIENDA_MAIL_FROM", "hello@example.test"),
+  from: ENV.fetch("LUNULA_MAIL_FROM", "hello@example.test"),
   smtp: {
     address: ENV["SMTP_ADDRESS"] || mail_credentials.dig(:mail, :smtp_address),
     port: (ENV["SMTP_PORT"] || mail_credentials.dig(:mail, :smtp_port) || 587).to_i,

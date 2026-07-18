@@ -32,7 +32,7 @@ module Workouts
 
       JSON.parse(content.text)
     rescue OpenAI::Errors::Error => error
-      Hacienda.logger.error("OpenAI workout generation failed: #{error.class}: #{error.message}")
+      Lunula.logger.error("OpenAI workout generation failed: #{error.class}: #{error.message}")
       raise Programmable::GenerationError, "We could not generate the workout right now. Please try again."
     rescue JSON::ParserError
       raise Programmable::GenerationError, "The model returned an invalid workout. Please try again."
@@ -44,8 +44,8 @@ module Workouts
 
     def api_key
       key = ENV["OPENAI_API_KEY"]
-      if key.to_s.empty? && File.file?(File.join(Hacienda.root, "config", "credentials.yml.enc"))
-        key = Hacienda.credentials.dig(:openai, :api_key)
+      if key.to_s.empty? && File.file?(File.join(Lunula.root, "config", "credentials.yml.enc"))
+        key = Lunula.credentials.dig(:openai, :api_key)
       end
       return key unless key.to_s.empty?
 

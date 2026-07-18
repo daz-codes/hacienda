@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 module Comments
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def create(context, params)
       post = Posts::Repository.find_with_comments(params[:id])
       can_manage = Posts::Policy.manage?(context.current_user, post)
-      raise Hacienda::NotFound unless (post.published? && !post.archived?) || can_manage
+      raise Lunula::NotFound unless (post.published? && !post.archived?) || can_manage
 
       attributes = params.permit(:author_name, :body).transform_values { |value| value.to_s.strip }
       comment = Comment.new(post_id: post.id, **attributes)

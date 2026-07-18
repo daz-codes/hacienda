@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 module Posts
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def index(_context, params)
       {posts: Repository.all}
     end
@@ -58,8 +58,8 @@ end
 
 module Posts
   class Post
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
 
     attributes :id, :created_at, :updated_at
     attribute :title, default: ""
@@ -77,32 +77,16 @@ end
 
 module Posts
   module Repository
-    STORE = Hacienda::Store.new(
+    extend Lunula::Repository
+
+    store(
       database: APP.database,
       table: :posts,
       record: Post
     )
 
-    module_function
-
-    def all
-      STORE.all(dataset.reverse_order(:created_at))
-    end
-
-    def find(id)
-      STORE.find(id)
-    end
-
-    def save(record)
-      STORE.save(record)
-    end
-
-    def delete(record)
-      STORE.delete(record)
-    end
-
-    def dataset
-      STORE.dataset
+    def all(scope = dataset.reverse_order(:created_at))
+      super(scope)
     end
   end
 end
@@ -235,5 +219,8 @@ class PostsRepositoryTest < Minitest::Test
 
     assert_equal record.id, found.id
     assert_equal "Saved", found.title
+    assert_equal record.id, Posts::Repository.find_by!(title: "Saved").id
+    assert_nil Posts::Repository.find_by(title: "Missing")
+    assert_raises(Lunula::NotFound) { Posts::Repository.find(0) }
   end
 end

@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class RendererTest < Minitest::Test
   def setup
-    @root = Dir.mktmpdir("hacienda-renderer")
+    @root = Dir.mktmpdir("lunula-renderer")
     write "app/domains/posts/views/show.erb", <<~ERB
       <h1><%= title %></h1>
       <div data-title="<%= title %>"><%= h title %></div>
@@ -21,7 +21,7 @@ class RendererTest < Minitest::Test
     ERB
     write "app/layouts/application.erb", "<main><%= content %></main>"
 
-    @renderer = Hacienda::Renderer.new(root: @root)
+    @renderer = Lunula::Renderer.new(root: @root)
   end
 
   def teardown
@@ -62,17 +62,17 @@ class RendererTest < Minitest::Test
   end
 
   def test_safe_html_is_immutable
-    html = Hacienda::HTML.safe("<strong>Safe</strong>")
+    html = Lunula::HTML.safe("<strong>Safe</strong>")
 
-    assert_instance_of Hacienda::SafeHTML, html
+    assert_instance_of Lunula::SafeHTML, html
     assert_predicate html, :frozen?
-    assert_same html, Hacienda::HTML.safe(html)
+    assert_same html, Lunula::HTML.safe(html)
   end
 
   def test_cache_fragment_reuses_safe_component_html
-    cache = Hacienda::Cache.new
+    cache = Lunula::Cache.new
     application = Struct.new(:cache).new(cache)
-    context = Hacienda::Context.new(
+    context = Lunula::Context.new(
       Rack::MockRequest.env_for("/posts"),
       application:
     )
@@ -108,10 +108,10 @@ class RendererTest < Minitest::Test
   end
 
   def test_cache_fragment_escapes_plain_string_results
-    cache = Hacienda::Cache.new
+    cache = Lunula::Cache.new
     application = Struct.new(:cache).new(cache)
-    context = Hacienda::Context.new(Rack::MockRequest.env_for("/"), application:)
-    view = Hacienda::Renderer::ViewContext.new(nil, "posts", {})
+    context = Lunula::Context.new(Rack::MockRequest.env_for("/"), application:)
+    view = Lunula::Renderer::ViewContext.new(nil, "posts", {})
 
     html = view.cache_fragment("unsafe", context:) { "<script>alert(1)</script>" }
 

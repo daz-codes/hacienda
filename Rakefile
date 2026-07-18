@@ -37,10 +37,15 @@ task "test:browser" do
   sh "npm run test:browser"
 end
 
+desc "Verify the publishable Morpheus package and its vendored copies"
+task "test:package" do
+  sh "npm run test:package"
+end
+
 desc "Run the PostgreSQL portability contracts"
 task "test:postgresql" do
   unless ENV["POSTGRES_DATABASE_URL"]
-    abort "POSTGRES_DATABASE_URL is required (for example postgres://localhost/hacienda_test)"
+    abort "POSTGRES_DATABASE_URL is required (for example postgres://localhost/lunula_test)"
   end
 
   ruby "-Itest", "test/postgresql_contract_test.rb"
@@ -53,7 +58,7 @@ task "test:audit" do
 end
 
 desc "Run all framework, example, client, browser, and dependency checks"
-task check: [:test, "test:examples", "test:client", "test:browser", "test:audit"]
+task check: [:test, "test:examples", "test:client", "test:browser", "test:package", "test:audit"]
 
 namespace :release do
   desc "Validate the public API, release documentation, and release scripts"

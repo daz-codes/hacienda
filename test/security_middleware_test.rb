@@ -4,11 +4,11 @@ require_relative "test_helper"
 
 class SecurityMiddlewareTest < Minitest::Test
   def teardown
-    Hacienda::Middleware::RequestLimits.new(->(_env) { [200, {}, []] })
+    Lunula::Middleware::RequestLimits.new(->(_env) { [200, {}, []] })
   end
 
   def test_request_limits_reject_declared_and_streamed_oversized_bodies
-    app = Hacienda::Middleware::RequestLimits.new(
+    app = Lunula::Middleware::RequestLimits.new(
       ->(env) { [200, {}, [env.fetch("rack.input").read]] },
       max_body_bytes: 4
     )
@@ -26,9 +26,9 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_request_limits_bound_query_size_parameter_count_and_depth
-    app = Hacienda::Middleware::RequestLimits.new(
+    app = Lunula::Middleware::RequestLimits.new(
       ->(env) {
-        Hacienda::Params.from_request(Rack::Request.new(env))
+        Lunula::Params.from_request(Rack::Request.new(env))
         [200, {}, ["OK"]]
       },
       max_query_bytes: 100,
@@ -36,7 +36,7 @@ class SecurityMiddlewareTest < Minitest::Test
       max_parameter_depth: 2
     )
     request = Rack::MockRequest.new(app)
-    query_limited = Hacienda::Middleware::RequestLimits.new(
+    query_limited = Lunula::Middleware::RequestLimits.new(
       ->(_env) { [200, {}, ["OK"]] },
       max_query_bytes: 12
     )
@@ -48,9 +48,9 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_request_limits_apply_to_json_and_hide_parser_details
-    app = Hacienda::Middleware::RequestLimits.new(
+    app = Lunula::Middleware::RequestLimits.new(
       ->(env) {
-        Hacienda::Params.from_request(Rack::Request.new(env))
+        Lunula::Params.from_request(Rack::Request.new(env))
         [200, {}, ["OK"]]
       },
       max_parameters: 3,
@@ -84,7 +84,7 @@ class SecurityMiddlewareTest < Minitest::Test
       two
       --AaB03x--
     MULTIPART
-    app = Hacienda::Middleware::RequestLimits.new(
+    app = Lunula::Middleware::RequestLimits.new(
       ->(env) {
         Rack::Request.new(env).params
         [200, {}, ["OK"]]
@@ -102,7 +102,7 @@ class SecurityMiddlewareTest < Minitest::Test
     assert_equal 413, response.status
     assert_equal "Multipart request has too many parts", response.body
 
-    files_only = Hacienda::Middleware::RequestLimits.new(
+    files_only = Lunula::Middleware::RequestLimits.new(
       ->(env) {
         Rack::Request.new(env).params
         [200, {}, ["OK"]]
@@ -120,7 +120,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_csrf_rejects_array_tokens_without_crashing
-    app = Hacienda::Middleware::CSRF.new(
+    app = Lunula::Middleware::CSRF.new(
       ->(_env) { [200, {"content-type" => "text/plain"}, ["OK"]] }
     )
 
@@ -136,7 +136,7 @@ class SecurityMiddlewareTest < Minitest::Test
 
   def test_csrf_does_not_touch_the_session_on_safe_requests
     session = {}
-    app = Hacienda::Middleware::CSRF.new(
+    app = Lunula::Middleware::CSRF.new(
       ->(_env) { [200, {"content-type" => "text/plain"}, ["OK"]] }
     )
 
@@ -147,7 +147,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_csrf_accepts_a_valid_token_on_unsafe_requests
-    app = Hacienda::Middleware::CSRF.new(
+    app = Lunula::Middleware::CSRF.new(
       ->(_env) { [200, {"content-type" => "text/plain"}, ["OK"]] }
     )
 
@@ -162,7 +162,7 @@ class SecurityMiddlewareTest < Minitest::Test
 
   def test_csrf_generates_a_token_on_unsafe_requests_without_one
     session = {}
-    app = Hacienda::Middleware::CSRF.new(
+    app = Lunula::Middleware::CSRF.new(
       ->(_env) { [200, {"content-type" => "text/plain"}, ["OK"]] }
     )
 
@@ -173,7 +173,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_security_headers_adds_safe_defaults
-    app = Hacienda::Middleware::SecurityHeaders.new(
+    app = Lunula::Middleware::SecurityHeaders.new(
       ->(_env) { [200, {"content-type" => "text/plain"}, ["OK"]] }
     )
 
@@ -188,7 +188,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_security_headers_adds_hsts_when_enabled
-    app = Hacienda::Middleware::SecurityHeaders.new(
+    app = Lunula::Middleware::SecurityHeaders.new(
       ->(_env) { [200, {}, ["OK"]] },
       hsts: true
     )
@@ -199,7 +199,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_security_headers_allows_custom_hsts_options
-    app = Hacienda::Middleware::SecurityHeaders.new(
+    app = Lunula::Middleware::SecurityHeaders.new(
       ->(_env) { [200, {}, ["OK"]] },
       hsts: {max_age: 300, include_subdomains: false}
     )
@@ -210,7 +210,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_security_headers_allows_custom_csp
-    app = Hacienda::Middleware::SecurityHeaders.new(
+    app = Lunula::Middleware::SecurityHeaders.new(
       ->(_env) { [200, {}, ["OK"]] },
       csp: {
         "default-src" => ["'self'"],
@@ -227,9 +227,9 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_security_headers_replaces_nonce_tokens_with_a_request_nonce
-    app = Hacienda::Middleware::SecurityHeaders.new(
+    app = Lunula::Middleware::SecurityHeaders.new(
       ->(env) {
-        env[Hacienda::Context::CSP_NONCE_ENV] = "known-nonce"
+        env[Lunula::Context::CSP_NONCE_ENV] = "known-nonce"
         [200, {}, ["OK"]]
       },
       csp: {
@@ -249,7 +249,7 @@ class SecurityMiddlewareTest < Minitest::Test
 
   def test_security_headers_generates_a_nonce_when_csp_requests_one
     seen_env = nil
-    app = Hacienda::Middleware::SecurityHeaders.new(
+    app = Lunula::Middleware::SecurityHeaders.new(
       ->(env) {
         seen_env = env
         [200, {}, ["OK"]]
@@ -258,14 +258,14 @@ class SecurityMiddlewareTest < Minitest::Test
     )
 
     response = Rack::MockRequest.new(app).get("/")
-    nonce = seen_env.fetch(Hacienda::Context::CSP_NONCE_ENV)
+    nonce = seen_env.fetch(Lunula::Context::CSP_NONCE_ENV)
 
     assert_match(/\Ascript-src 'self' 'nonce-[A-Za-z0-9+\/]+=*'\z/, response["content-security-policy"])
     assert_includes response["content-security-policy"], nonce
   end
 
   def test_security_headers_renders_bare_csp_directives
-    app = Hacienda::Middleware::SecurityHeaders.new(
+    app = Lunula::Middleware::SecurityHeaders.new(
       ->(_env) { [200, {}, ["OK"]] },
       csp: {"upgrade-insecure-requests" => []}
     )
@@ -276,7 +276,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_security_headers_do_not_overwrite_existing_headers
-    app = Hacienda::Middleware::SecurityHeaders.new(
+    app = Lunula::Middleware::SecurityHeaders.new(
       ->(_env) { [200, {"x-frame-options" => "DENY"}, ["OK"]] }
     )
 
@@ -286,7 +286,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_host_authorization_allows_configured_hosts_and_strips_ports
-    app = Hacienda::Middleware::HostAuthorization.new(
+    app = Lunula::Middleware::HostAuthorization.new(
       ->(_env) { [200, {}, ["OK"]] },
       hosts: ["Example.test"]
     )
@@ -297,7 +297,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_host_authorization_rejects_unknown_hosts
-    app = Hacienda::Middleware::HostAuthorization.new(
+    app = Lunula::Middleware::HostAuthorization.new(
       ->(_env) { [200, {}, ["OK"]] },
       hosts: ["example.test"]
     )
@@ -309,11 +309,11 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_host_authorization_handles_ipv6_and_url_config_values
-    ipv6_app = Hacienda::Middleware::HostAuthorization.new(
+    ipv6_app = Lunula::Middleware::HostAuthorization.new(
       ->(_env) { [200, {}, ["OK"]] },
       hosts: ["[::1]"]
     )
-    url_app = Hacienda::Middleware::HostAuthorization.new(
+    url_app = Lunula::Middleware::HostAuthorization.new(
       ->(_env) { [200, {}, ["OK"]] },
       hosts: ["https://App.Example.test:443"]
     )
@@ -323,23 +323,23 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_app_url_uses_canonical_configuration_and_rejects_relative_paths
-    previous_app_url = ENV.delete("HACIENDA_APP_URL")
+    previous_app_url = ENV.delete("LUNULA_APP_URL")
     previous_legacy_url = ENV.delete("APP_URL")
-    ENV["HACIENDA_APP_URL"] = "https://App.Example.test/base/"
+    ENV["LUNULA_APP_URL"] = "https://App.Example.test/base/"
 
-    assert_equal "https://app.example.test/base", Hacienda.app_url
-    assert_equal "https://app.example.test/posts/1?token=abc", Hacienda.app_url("/posts/1?token=abc")
-    assert_equal "app.example.test", Hacienda.app_host
-    assert_raises(ArgumentError) { Hacienda.app_url("posts/1") }
+    assert_equal "https://app.example.test/base", Lunula.app_url
+    assert_equal "https://app.example.test/posts/1?token=abc", Lunula.app_url("/posts/1?token=abc")
+    assert_equal "app.example.test", Lunula.app_host
+    assert_raises(ArgumentError) { Lunula.app_url("posts/1") }
   ensure
-    ENV["HACIENDA_APP_URL"] = previous_app_url if previous_app_url
-    ENV.delete("HACIENDA_APP_URL") unless previous_app_url
+    ENV["LUNULA_APP_URL"] = previous_app_url if previous_app_url
+    ENV.delete("LUNULA_APP_URL") unless previous_app_url
     ENV["APP_URL"] = previous_legacy_url if previous_legacy_url
     ENV.delete("APP_URL") unless previous_legacy_url
   end
 
   def test_rate_limiter_limits_matching_requests
-    app = Hacienda::Middleware::RateLimiter.new(
+    app = Lunula::Middleware::RateLimiter.new(
       ->(_env) { [200, {}, ["OK"]] },
       rules: [{method: "POST", path: "/login", limit: 2, period: 60}],
       key: ->(_request) { "client" }
@@ -356,7 +356,7 @@ class SecurityMiddlewareTest < Minitest::Test
   end
 
   def test_rate_limiter_ignores_non_matching_requests
-    app = Hacienda::Middleware::RateLimiter.new(
+    app = Lunula::Middleware::RateLimiter.new(
       ->(_env) { [200, {}, ["OK"]] },
       rules: [{method: "POST", path: "/login", limit: 1, period: 60}],
       key: ->(_request) { "client" }
@@ -371,7 +371,7 @@ class SecurityMiddlewareTest < Minitest::Test
     store = {
       ["POST", "/login", "expired"] => {count: 99, reset_at: Time.now.to_f - 1}
     }
-    app = Hacienda::Middleware::RateLimiter.new(
+    app = Lunula::Middleware::RateLimiter.new(
       ->(_env) { [200, {}, ["OK"]] },
       rules: [{method: "POST", path: "/login", limit: 1, period: 60}],
       store: store,
@@ -388,7 +388,7 @@ class SecurityMiddlewareTest < Minitest::Test
       ["POST", "/login", "old"] => {count: 1, reset_at: now + 10},
       ["POST", "/login", "new"] => {count: 1, reset_at: now + 20}
     }
-    app = Hacienda::Middleware::RateLimiter.new(
+    app = Lunula::Middleware::RateLimiter.new(
       ->(_env) { [200, {}, ["OK"]] },
       rules: [{method: "POST", path: "/login", limit: 1, period: 60}],
       store: store,

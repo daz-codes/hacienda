@@ -2,20 +2,12 @@
 
 module Franchises
   module Repository
-    STORE = Hacienda::Store.new(database: APP.database, table: :venues, record: Venue)
+    extend Lunula::Repository
 
-    module_function
+    store database: APP.database, table: :venues, record: Venue
 
     def available
-      STORE.all(STORE.dataset.where(published: true).order(:name))
-    end
-
-    def save(venue)
-      STORE.save(venue)
-    end
-
-    def dataset
-      STORE.dataset
+      all(dataset.where(published: true).order(:name))
     end
   end
 end

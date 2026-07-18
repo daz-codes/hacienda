@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class FlashTest < Minitest::Test
   def test_flash_now_normalizes_symbol_keys
-    flash = Hacienda::Flash.new({})
+    flash = Lunula::Flash.new({})
 
     flash.now[:notice] = "Saved"
 
@@ -15,7 +15,7 @@ class FlashTest < Minitest::Test
 
   def test_flash_now_is_not_written_to_the_session
     session = {}
-    flash = Hacienda::Flash.new(session)
+    flash = Lunula::Flash.new(session)
 
     flash.now[:notice] = "Current request only"
 

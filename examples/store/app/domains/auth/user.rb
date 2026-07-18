@@ -2,8 +2,8 @@
 
 module Auth
   class User
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
     include PasswordAuthenticatable
 
     attributes :id, :password_digest, :email_verified_at, :created_at, :updated_at

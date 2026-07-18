@@ -14,7 +14,7 @@ require "fileutils"
 
 BLOG_ROOT = File.expand_path("../..", __dir__)
 test_database_directory = unless ENV["DATABASE_URL"]
-  Dir.mktmpdir("hacienda-blog-test").tap do |directory|
+  Dir.mktmpdir("lunula-blog-test").tap do |directory|
     ENV["DATABASE_URL"] = "sqlite://#{File.join(directory, "test.sqlite3")}"
   end
 end
@@ -38,12 +38,12 @@ class BlogTest < Minitest::Test
     DB[:comments].delete
     DB[:posts].delete
     DB[:users].delete
-    Hacienda.clear_mail_deliveries
+    Lunula.clear_mail_deliveries
     clear_cookies
   end
 
   def test_author_can_create_publish_and_archive_a_post
-    recorder = Hacienda::Events::Recorder.new
+    recorder = Lunula::Events::Recorder.new
     published_subscription = APP.events.subscribe(Posts::Events::Published, recorder)
     archived_subscription = APP.events.subscribe(Posts::Events::Archived, recorder)
     signup
@@ -86,7 +86,7 @@ class BlogTest < Minitest::Test
   end
 
   def test_owner_archiving_emits_an_event_after_commit
-    recorder = Hacienda::Events::Recorder.new
+    recorder = Lunula::Events::Recorder.new
     subscription = APP.events.subscribe(Posts::Events::Archived, recorder)
     signup
 
@@ -168,7 +168,7 @@ class BlogTest < Minitest::Test
 
     get "/login"
     previous_csrf = csrf_token
-    previous_cookie = rack_mock_session.cookie_jar["hacienda.session"]
+    previous_cookie = rack_mock_session.cookie_jar["lunula.session"]
     post "/login", {
       _csrf: previous_csrf,
       email: "writer@example.com",
@@ -177,7 +177,7 @@ class BlogTest < Minitest::Test
     assert_equal 303, last_response.status
 
     get "/"
-    refute_equal previous_cookie, rack_mock_session.cookie_jar["hacienda.session"]
+    refute_equal previous_cookie, rack_mock_session.cookie_jar["lunula.session"]
     refute_equal previous_csrf, csrf_token
   end
 
@@ -415,7 +415,7 @@ class BlogTest < Minitest::Test
       password: "long-enough-password"
     }
     assert_equal 303, last_response.status
-    assert_equal "Verify your email", Hacienda.mail_deliveries.last.subject
+    assert_equal "Verify your email", Lunula.mail_deliveries.last.subject
 
     get "/verify-email?token=#{latest_mail_token}"
     assert_equal 200, last_response.status
@@ -430,12 +430,12 @@ class BlogTest < Minitest::Test
   end
 
   def latest_mail_token
-    Hacienda.mail_deliveries.last.body.decoded.match(/token=([^\s]+)/).captures.first
+    Lunula.mail_deliveries.last.body.decoded.match(/token=([^\s]+)/).captures.first
   end
 
   def csrf_token
     last_response.body.match(/name="_csrf" value="([^"]+)"/)&.captures&.first ||
-      rack_mock_session.cookie_jar["hacienda.session"] && begin
+      rack_mock_session.cookie_jar["lunula.session"] && begin
         get "/"
         last_response.body.match(/name="_csrf" value="([^"]+)"/).captures.first
       end

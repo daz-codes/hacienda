@@ -90,7 +90,7 @@ class DurableJobsTest < Minitest::Test
     module_function
 
     def perform
-      database[:hacienda_jobs].update(locked_by: "another-worker")
+      database[:lunula_jobs].update(locked_by: "another-worker")
     end
   end
 
@@ -118,7 +118,7 @@ class DurableJobsTest < Minitest::Test
       started << true
       loop do
         sleep 0.005
-        Hacienda::Jobs.checkpoint!
+        Lunula::Jobs.checkpoint!
       end
     end
   end
@@ -132,7 +132,7 @@ class DurableJobsTest < Minitest::Test
       started << true
       loop do
         sleep 0.005
-        Hacienda::Jobs.checkpoint!
+        Lunula::Jobs.checkpoint!
       end
     end
   end
@@ -154,19 +154,19 @@ class DurableJobsTest < Minitest::Test
   def teardown
     @database.disconnect
     RecorderJob.clear
-    Hacienda.configure_jobs(adapter: :inline)
-    Hacienda.clear_mail_deliveries
+    Lunula.configure_jobs(adapter: :inline)
+    Lunula.clear_mail_deliveries
   end
 
   def test_serializer_round_trips_supported_values
     date = Date.new(2026, 6, 29)
     time = Time.utc(2026, 6, 29, 12, 30, 1, 123_456)
-    payload = Hacienda::Jobs::Serializer.dump(
-      args: [1, :published, date, time, {nested: [true, nil]}, {"__hacienda_type__" => "application"}],
+    payload = Lunula::Jobs::Serializer.dump(
+      args: [1, :published, date, time, {nested: [true, nil]}, {"__lunula_type__" => "application"}],
       kwargs: {label: "post"}
     )
 
-    args, kwargs = Hacienda::Jobs::Serializer.load(payload)
+    args, kwargs = Lunula::Jobs::Serializer.load(payload)
 
     assert_equal [
       1,
@@ -174,18 +174,18 @@ class DurableJobsTest < Minitest::Test
       date,
       time,
       {"nested" => [true, nil]},
-      {"__hacienda_type__" => "application"}
+      {"__lunula_type__" => "application"}
     ], args
     assert_equal({label: "post"}, kwargs)
   end
 
   def test_rejects_arbitrary_objects
-    error = assert_raises(Hacienda::Jobs::Error) do
+    error = assert_raises(Lunula::Jobs::Error) do
       @adapter.enqueue(RecorderJob, args: [Object.new], kwargs: {})
     end
 
     assert_includes error.message, "only accept JSON values"
-    assert_empty @database[:hacienda_jobs]
+    assert_empty @database[:lunula_jobs]
   end
 
   def test_job_survives_adapter_recreation_and_records_completion_history
@@ -197,7 +197,7 @@ class DurableJobsTest < Minitest::Test
     assert_equal id, execution.id
     assert_equal :succeeded, execution.status
     assert_equal [[7, "durable"]], RecorderJob.calls
-    row = @database[:hacienda_jobs].where(id:).first
+    row = @database[:lunula_jobs].where(id:).first
     refute_nil row.fetch(:completed_at)
     assert_nil row.fetch(:locked_at)
     assert_nil row.fetch(:discarded_at)
@@ -205,8 +205,8 @@ class DurableJobsTest < Minitest::Test
   end
 
   def test_scheduled_job_is_not_claimed_until_it_is_due
-    Hacienda.configure_jobs(adapter: @adapter)
-    id = Hacienda.enqueue_at(@now + 60, RecorderJob, 12, label: "scheduled")
+    Lunula.configure_jobs(adapter: @adapter)
+    id = Lunula.enqueue_at(@now + 60, RecorderJob, 12, label: "scheduled")
 
     assert_nil @adapter.work_once
     assert_equal [id], @adapter.scheduled.map { |row| row.fetch(:id) }
@@ -245,14 +245,14 @@ class DurableJobsTest < Minitest::Test
 
     first = @adapter.work_once
     assert_equal :retrying, first.status
-    row = @database[:hacienda_jobs].where(id:).first
+    row = @database[:lunula_jobs].where(id:).first
     assert_equal 1, row[:attempts]
     assert_nil row[:failed_at]
 
     @now += 2
     second = @adapter.work_once
     assert_equal :failed, second.status
-    row = @database[:hacienda_jobs].where(id:).first
+    row = @database[:lunula_jobs].where(id:).first
     assert_equal 2, row[:attempts]
     refute_nil row[:failed_at]
     refute_nil row[:discarded_at]
@@ -260,8 +260,8 @@ class DurableJobsTest < Minitest::Test
     assert_nil @adapter.work_once
 
     assert @adapter.retry_failed(id)
-    assert_equal 0, @database[:hacienda_jobs].where(id:).get(:attempts)
-    assert_nil @database[:hacienda_jobs].where(id:).get(:discarded_at)
+    assert_equal 0, @database[:lunula_jobs].where(id:).get(:attempts)
+    assert_nil @database[:lunula_jobs].where(id:).get(:discarded_at)
   end
 
   def test_status_lists_and_prunes_job_history
@@ -294,13 +294,13 @@ class DurableJobsTest < Minitest::Test
     assert_equal 1, counts.fetch(:completed)
     assert_equal 1, counts.fetch(:discarded)
     assert_equal 0, counts.fetch(:failed)
-    assert_equal [scheduled_id], @database[:hacienda_jobs].select_map(:id)
+    assert_equal [scheduled_id], @database[:lunula_jobs].select_map(:id)
   end
 
   def test_health_reports_failed_jobs_stale_workers_and_old_pending_work
     @adapter.enqueue(RecorderJob, args: [1], kwargs: {label: "old"})
     @now += 7200
-    @database[:hacienda_job_workers].insert(
+    @database[:lunula_job_workers].insert(
       id: "stale-worker",
       process_id: 123,
       hostname: "worker.example",
@@ -320,7 +320,7 @@ class DurableJobsTest < Minitest::Test
   end
 
   def test_dashboard_renders_queue_state_and_health_json
-    recurring = Tempfile.new(["hacienda-dashboard-recurring", ".yml"])
+    recurring = Tempfile.new(["lunula-dashboard-recurring", ".yml"])
     recurring.write(<<~YAML)
       tasks:
         heartbeat:
@@ -329,8 +329,8 @@ class DurableJobsTest < Minitest::Test
     YAML
     recurring.flush
     @adapter.enqueue(RecorderJob, args: [5], kwargs: {label: "dashboard"})
-    application = Struct.new(:root).new(Dir.mktmpdir("hacienda-dashboard-root"))
-    dashboard = Hacienda::Jobs::Dashboard.new(
+    application = Struct.new(:root).new(Dir.mktmpdir("lunula-dashboard-root"))
+    dashboard = Lunula::Jobs::Dashboard.new(
       application:,
       adapter: @adapter,
       recurring_path: recurring.path,
@@ -342,7 +342,7 @@ class DurableJobsTest < Minitest::Test
     health = request.get("/health")
 
     assert_equal 200, response.status
-    assert_includes response.body, "Hacienda Jobs"
+    assert_includes response.body, "Lunula Jobs"
     assert_includes response.body, "DurableJobsTest::RecorderJob"
     assert_includes response.body, "heartbeat"
     assert_equal 200, health.status
@@ -353,24 +353,24 @@ class DurableJobsTest < Minitest::Test
   end
 
   def test_dashboard_requires_authorization_in_production_without_password
-    previous = Hacienda.env.name
-    Hacienda.env = "production"
-    application = Struct.new(:root).new(Dir.mktmpdir("hacienda-dashboard-root"))
-    dashboard = Hacienda::Jobs::Dashboard.new(application:, adapter: @adapter)
+    previous = Lunula.env.name
+    Lunula.env = "production"
+    application = Struct.new(:root).new(Dir.mktmpdir("lunula-dashboard-root"))
+    dashboard = Lunula::Jobs::Dashboard.new(application:, adapter: @adapter)
 
     response = Rack::MockRequest.new(dashboard).get("/")
 
     assert_equal 403, response.status
   ensure
-    Hacienda.env = previous
+    Lunula.env = previous
     FileUtils.rm_rf(application.root) if defined?(application) && application
   end
 
   def test_dashboard_local_development_gate_uses_remote_addr_not_forwarded_for
-    previous = Hacienda.env.name
-    Hacienda.env = "development"
-    application = Struct.new(:root).new(Dir.mktmpdir("hacienda-dashboard-root"))
-    dashboard = Hacienda::Jobs::Dashboard.new(application:, adapter: @adapter)
+    previous = Lunula.env.name
+    Lunula.env = "development"
+    application = Struct.new(:root).new(Dir.mktmpdir("lunula-dashboard-root"))
+    dashboard = Lunula::Jobs::Dashboard.new(application:, adapter: @adapter)
 
     response = Rack::MockRequest.new(dashboard).get(
       "/",
@@ -380,13 +380,13 @@ class DurableJobsTest < Minitest::Test
 
     assert_equal 403, response.status
   ensure
-    Hacienda.env = previous
+    Lunula.env = previous
     FileUtils.rm_rf(application.root) if defined?(application) && application
   end
 
   def test_lifecycle_notifications_are_emitted
     events = []
-    subscription = Hacienda::Jobs.subscribe { |event, payload| events << [event, payload] }
+    subscription = Lunula::Jobs.subscribe { |event, payload| events << [event, payload] }
     id = @adapter.enqueue(RecorderJob, args: [4], kwargs: {label: "notify"})
 
     @adapter.work_once
@@ -394,12 +394,12 @@ class DurableJobsTest < Minitest::Test
     assert_equal [:enqueue, :start, :finish], events.map(&:first)
     assert events.all? { |_event, payload| payload.fetch(:id) == id }
   ensure
-    Hacienda::Jobs.unsubscribe(subscription) if subscription
+    Lunula::Jobs.unsubscribe(subscription) if subscription
   end
 
   def test_expired_lease_can_be_reclaimed
     id = @adapter.enqueue(RecorderJob, args: [9], kwargs: {label: "lease"})
-    @database[:hacienda_jobs].where(id:).update(
+    @database[:lunula_jobs].where(id:).update(
       locked_at: @now - 120,
       locked_by: "dead-worker"
     )
@@ -412,14 +412,14 @@ class DurableJobsTest < Minitest::Test
 
   def test_expired_final_attempt_moves_to_failed_state_after_a_worker_crash
     id = @adapter.enqueue(RecorderJob, args: [9], kwargs: {label: "crashed"})
-    @database[:hacienda_jobs].where(id:).update(
+    @database[:lunula_jobs].where(id:).update(
       attempts: 10,
       locked_at: @now - 120,
       locked_by: "dead-worker"
     )
 
     assert_nil @adapter.work_once
-    row = @database[:hacienda_jobs].where(id:).first
+    row = @database[:lunula_jobs].where(id:).first
     refute_nil row[:failed_at]
     assert_includes row[:last_error], "LeaseExpired"
     assert_empty RecorderJob.calls
@@ -451,7 +451,7 @@ class DurableJobsTest < Minitest::Test
 
   def test_worker_processes_a_batch_with_configured_thread_concurrency
     4.times { |index| @adapter.enqueue(BlockingJob, args: [index], kwargs: {}) }
-    worker = Hacienda::Jobs::Worker.new(
+    worker = Lunula::Jobs::Worker.new(
       adapter: @adapter,
       queues: :all,
       threads: 2,
@@ -477,7 +477,7 @@ class DurableJobsTest < Minitest::Test
       @adapter.enqueue(RecorderJob, args: [index], kwargs: {label: "critical"}, queue: "critical")
     end
     @adapter.enqueue(RecorderJob, args: [99], kwargs: {label: "default"}, queue: "default")
-    worker = Hacienda::Jobs::Worker.new(
+    worker = Lunula::Jobs::Worker.new(
       adapter: @adapter,
       queues: %w[critical default],
       threads: 1,
@@ -493,7 +493,7 @@ class DurableJobsTest < Minitest::Test
   def test_all_queues_use_global_priority_ordering
     @adapter.enqueue(LowPriorityJob, args: [], kwargs: {}, queue: "slow")
     @adapter.enqueue(HighPriorityJob, args: [], kwargs: {}, queue: "fast")
-    worker = Hacienda::Jobs::Worker.new(
+    worker = Lunula::Jobs::Worker.new(
       adapter: @adapter,
       queues: :all,
       threads: 1,
@@ -511,25 +511,25 @@ class DurableJobsTest < Minitest::Test
     duplicate = @adapter.enqueue(UniqueJob, args: [7], kwargs: {})
 
     assert_equal first, duplicate
-    assert_equal 1, @database[:hacienda_jobs].count
-    assert_equal "unique:7", @database[:hacienda_jobs].where(id: first).get(:unique_key)
+    assert_equal 1, @database[:lunula_jobs].count
+    assert_equal "unique:7", @database[:lunula_jobs].where(id: first).get(:unique_key)
 
     @now += 61
     second = @adapter.enqueue(UniqueJob, args: [7], kwargs: {})
 
     refute_equal first, second
-    assert_equal 2, @database[:hacienda_jobs].count
+    assert_equal 2, @database[:lunula_jobs].count
   end
 
   def test_unique_job_can_raise_on_conflict
     @adapter.enqueue(RaisingUniqueJob, args: [8], kwargs: {})
 
-    error = assert_raises(Hacienda::Jobs::Error) do
+    error = assert_raises(Lunula::Jobs::Error) do
       @adapter.enqueue(RaisingUniqueJob, args: [8], kwargs: {})
     end
 
     assert_includes error.message, "unique job already exists"
-    assert_equal 1, @database[:hacienda_jobs].count
+    assert_equal 1, @database[:lunula_jobs].count
   end
 
   def test_concurrency_limit_blocks_claims_and_exposes_reason
@@ -549,19 +549,19 @@ class DurableJobsTest < Minitest::Test
 
     next_claim = @adapter.claim_many(queues: :all, limit: 1).fetch(0)
     assert_equal second, next_claim.row.fetch(:id)
-    assert_nil @database[:hacienda_jobs].where(id: second).get(:blocked_at)
-    assert_nil @database[:hacienda_jobs].where(id: second).get(:blocked_reason)
+    assert_nil @database[:lunula_jobs].where(id: second).get(:blocked_at)
+    assert_nil @database[:lunula_jobs].where(id: second).get(:blocked_reason)
   end
 
   def test_concurrency_limit_survives_independent_connection_contention
-    path = File.join(Dir.mktmpdir("hacienda-job-concurrency"), "jobs.sqlite3")
+    path = File.join(Dir.mktmpdir("lunula-job-concurrency"), "jobs.sqlite3")
     first_database = Sequel.sqlite(path, timeout: 5_000)
     first_database.run("PRAGMA journal_mode=WAL")
     create_jobs_table_on(first_database)
     second_database = Sequel.sqlite(path, timeout: 5_000)
-    writer = Hacienda::Jobs::Adapters::Database.new(database: first_database, clock: -> { @now })
-    first_adapter = Hacienda::Jobs::Adapters::Database.new(database: first_database, clock: -> { @now })
-    second_adapter = Hacienda::Jobs::Adapters::Database.new(database: second_database, clock: -> { @now })
+    writer = Lunula::Jobs::Adapters::Database.new(database: first_database, clock: -> { @now })
+    first_adapter = Lunula::Jobs::Adapters::Database.new(database: first_database, clock: -> { @now })
+    second_adapter = Lunula::Jobs::Adapters::Database.new(database: second_database, clock: -> { @now })
     2.times { writer.enqueue(ConcurrencyJob, args: [99], kwargs: {}) }
     ready = Queue.new
     release = Queue.new
@@ -587,7 +587,7 @@ class DurableJobsTest < Minitest::Test
   def test_enqueue_all_inserts_jobs_in_one_transaction_and_runs_callback
     callback_ids = nil
 
-    ids = Hacienda::Jobs.enqueue_all(
+    ids = Lunula::Jobs.enqueue_all(
       @adapter,
       [
         {job: RecorderJob, args: [1], kwargs: {label: "bulk"}},
@@ -597,7 +597,7 @@ class DurableJobsTest < Minitest::Test
 
     assert_equal 2, ids.length
     assert_equal ids, callback_ids
-    assert_equal ids, @database[:hacienda_jobs].order(:id).select_map(:id)
+    assert_equal ids, @database[:lunula_jobs].order(:id).select_map(:id)
   end
 
   def test_pausing_and_resuming_a_queue_blocks_and_releases_pending_work
@@ -624,7 +624,7 @@ class DurableJobsTest < Minitest::Test
     reschedule_id = @adapter.enqueue(RecorderJob, args: [2], kwargs: {label: "reschedule"})
 
     assert @adapter.discard(discard_id, reason: "operator")
-    discarded = @database[:hacienda_jobs].where(id: discard_id).first
+    discarded = @database[:lunula_jobs].where(id: discard_id).first
     assert_equal "discarded", discarded.fetch(:failure_kind)
     assert_includes discarded.fetch(:last_error), "operator"
     refute_nil discarded.fetch(:discarded_at)
@@ -645,7 +645,7 @@ class DurableJobsTest < Minitest::Test
 
   def test_worker_registry_tracks_workload_and_graceful_drain
     @adapter.enqueue(BlockingJob, args: [21], kwargs: {})
-    worker = Hacienda::Jobs::Worker.new(
+    worker = Lunula::Jobs::Worker.new(
       adapter: @adapter,
       queues: %w[default mailers],
       threads: 2,
@@ -674,45 +674,45 @@ class DurableJobsTest < Minitest::Test
   end
 
   def test_running_job_renews_its_lease
-    adapter = Hacienda::Jobs::Adapters::Database.new(
+    adapter = Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 0.06,
       heartbeat_interval: 0.01,
       retry_delay: ->(_attempt) { 0 }
     )
-    competing_adapter = Hacienda::Jobs::Adapters::Database.new(
+    competing_adapter = Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 0.06,
       heartbeat_interval: 0.01
     )
     id = adapter.enqueue(BlockingJob, args: [31], kwargs: {})
-    worker = Hacienda::Jobs::Worker.new(adapter:, threads: 1, batch_size: 1, poll_interval: 0)
+    worker = Lunula::Jobs::Worker.new(adapter:, threads: 1, batch_size: 1, poll_interval: 0)
 
     execution = Thread.new { worker.work_once }
     assert_equal 31, BlockingJob.started.pop
     sleep 0.12
 
     assert_empty competing_adapter.claim_many(queues: :all, limit: 1)
-    assert_equal id, @database[:hacienda_jobs].get(:id)
+    assert_equal id, @database[:lunula_jobs].get(:id)
     BlockingJob.release << true
     assert_equal :succeeded, execution.value.jobs.status
   end
 
   def test_running_job_keeps_its_worker_heartbeat_alive
-    adapter = Hacienda::Jobs::Adapters::Database.new(
+    adapter = Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 0.1,
       heartbeat_interval: 0.01,
       worker_timeout: 0.04
     )
-    competing = Hacienda::Jobs::Adapters::Database.new(
+    competing = Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 0.1,
       heartbeat_interval: 0.01,
       worker_timeout: 0.04
     )
     adapter.enqueue(BlockingJob, args: [34], kwargs: {})
-    worker = Hacienda::Jobs::Worker.new(adapter:, threads: 1, batch_size: 1, poll_interval: 0, id: "live-worker")
+    worker = Lunula::Jobs::Worker.new(adapter:, threads: 1, batch_size: 1, poll_interval: 0, id: "live-worker")
 
     thread = Thread.new { worker.run }
     assert_equal 34, BlockingJob.started.pop
@@ -732,7 +732,7 @@ class DurableJobsTest < Minitest::Test
   end
 
   def test_cooperative_timeout_is_retried_then_becomes_terminal
-    adapter = Hacienda::Jobs::Adapters::Database.new(
+    adapter = Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 1,
       heartbeat_interval: 0.01,
@@ -741,13 +741,13 @@ class DurableJobsTest < Minitest::Test
     id = adapter.enqueue(TimeoutJob, args: [], kwargs: {})
 
     first = adapter.work_once
-    row = @database[:hacienda_jobs].where(id:).first
+    row = @database[:lunula_jobs].where(id:).first
     assert_equal :timed_out, first.status
     assert_equal "timeout", row.fetch(:failure_kind)
     assert_nil row.fetch(:failed_at)
 
     second = adapter.work_once
-    row = @database[:hacienda_jobs].where(id:).first
+    row = @database[:lunula_jobs].where(id:).first
     assert_equal :timed_out, second.status
     assert_equal "timeout", row.fetch(:failure_kind)
     refute_nil row.fetch(:failed_at)
@@ -755,7 +755,7 @@ class DurableJobsTest < Minitest::Test
   end
 
   def test_running_job_can_be_cancelled_cooperatively
-    adapter = Hacienda::Jobs::Adapters::Database.new(
+    adapter = Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 1,
       heartbeat_interval: 0.01
@@ -766,7 +766,7 @@ class DurableJobsTest < Minitest::Test
     CancellableJob.started.pop
     assert adapter.cancel(id)
     result = execution.value
-    row = @database[:hacienda_jobs].where(id:).first
+    row = @database[:lunula_jobs].where(id:).first
 
     assert_equal :cancelled, result.status
     assert_equal "cancelled", row.fetch(:failure_kind)
@@ -779,7 +779,7 @@ class DurableJobsTest < Minitest::Test
     id = @adapter.enqueue(RecorderJob, args: [32], kwargs: {label: "cancelled"})
 
     assert @adapter.cancel(id)
-    row = @database[:hacienda_jobs].where(id:).first
+    row = @database[:lunula_jobs].where(id:).first
 
     assert_equal "cancelled", row.fetch(:failure_kind)
     refute_nil row.fetch(:failed_at)
@@ -789,7 +789,7 @@ class DurableJobsTest < Minitest::Test
 
   def test_stale_worker_heartbeat_releases_owned_jobs_before_the_lease_expires
     id = @adapter.enqueue(RecorderJob, args: [33], kwargs: {label: "recovered"})
-    @database[:hacienda_job_workers].insert(
+    @database[:lunula_job_workers].insert(
       id: "dead-worker",
       process_id: 123,
       hostname: "dead.example",
@@ -800,13 +800,13 @@ class DurableJobsTest < Minitest::Test
       last_heartbeat_at: @now - 120,
       current_workload: 1
     )
-    @database[:hacienda_jobs].where(id:).update(
+    @database[:lunula_jobs].where(id:).update(
       attempts: 1,
       locked_at: @now,
       locked_by: "dead-token",
       worker_id: "dead-worker"
     )
-    recovering = Hacienda::Jobs::Adapters::Database.new(
+    recovering = Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 300,
       heartbeat_interval: 10,
@@ -819,17 +819,17 @@ class DurableJobsTest < Minitest::Test
     assert_equal id, claim.row.fetch(:id)
     assert_equal "new-worker", claim.row.fetch(:worker_id)
     assert_equal "abandoned", claim.row.fetch(:failure_kind)
-    assert_empty @database[:hacienda_job_workers].where(id: "dead-worker")
+    assert_empty @database[:lunula_job_workers].where(id: "dead-worker")
   end
 
   def test_independent_database_connections_do_not_claim_duplicate_jobs
-    path = File.join(Dir.mktmpdir("hacienda-job-contention"), "jobs.sqlite3")
+    path = File.join(Dir.mktmpdir("lunula-job-contention"), "jobs.sqlite3")
     first_database = Sequel.sqlite(path, timeout: 5_000)
     first_database.run("PRAGMA journal_mode=WAL")
     create_jobs_table_on(first_database)
     second_database = Sequel.sqlite(path, timeout: 5_000)
-    first_adapter = Hacienda::Jobs::Adapters::Database.new(database: first_database, clock: -> { @now })
-    second_adapter = Hacienda::Jobs::Adapters::Database.new(database: second_database, clock: -> { @now })
+    first_adapter = Lunula::Jobs::Adapters::Database.new(database: first_database, clock: -> { @now })
+    second_adapter = Lunula::Jobs::Adapters::Database.new(database: second_database, clock: -> { @now })
     12.times { |index| first_adapter.enqueue(RecorderJob, args: [index], kwargs: {label: "shared"}) }
     ready = Queue.new
     release = Queue.new
@@ -856,12 +856,12 @@ class DurableJobsTest < Minitest::Test
   def test_worker_processes_do_not_claim_duplicate_jobs
     skip "fork is unavailable" unless Process.respond_to?(:fork)
 
-    directory = Dir.mktmpdir("hacienda-job-processes")
+    directory = Dir.mktmpdir("lunula-job-processes")
     path = File.join(directory, "jobs.sqlite3")
     database = Sequel.sqlite(path, timeout: 5_000)
     database.run("PRAGMA journal_mode=WAL")
     create_jobs_table_on(database)
-    writer = Hacienda::Jobs::Adapters::Database.new(database:, clock: -> { @now })
+    writer = Lunula::Jobs::Adapters::Database.new(database:, clock: -> { @now })
     12.times { |index| writer.enqueue(RecorderJob, args: [index], kwargs: {label: "process"}) }
     database.disconnect
     @database.disconnect
@@ -873,7 +873,7 @@ class DurableJobsTest < Minitest::Test
         result_read.close
         gate_read.read(1)
         child_database = Sequel.sqlite(path, timeout: 5_000)
-        adapter = Hacienda::Jobs::Adapters::Database.new(database: child_database, clock: -> { @now })
+        adapter = Lunula::Jobs::Adapters::Database.new(database: child_database, clock: -> { @now })
         ids = adapter.claim_many(queues: :all, limit: 6).map { |claim| claim.row.fetch(:id) }
         Marshal.dump(ids, result_write)
         result_write.close
@@ -904,13 +904,13 @@ class DurableJobsTest < Minitest::Test
   def test_sigkill_job_is_recovered_from_the_dead_worker_heartbeat
     skip "fork is unavailable" unless Process.respond_to?(:fork)
 
-    directory = Dir.mktmpdir("hacienda-job-sigkill")
+    directory = Dir.mktmpdir("lunula-job-sigkill")
     path = File.join(directory, "jobs.sqlite3")
     database = Sequel.sqlite(path, timeout: 5_000)
     database.run("PRAGMA journal_mode=WAL")
     create_jobs_table_on(database)
     create_workers_table_on(database)
-    writer = Hacienda::Jobs::Adapters::Database.new(database:, lease_seconds: 10, heartbeat_interval: 1)
+    writer = Lunula::Jobs::Adapters::Database.new(database:, lease_seconds: 10, heartbeat_interval: 1)
     id = writer.enqueue(RecorderJob, args: [40], kwargs: {label: "sigkill"})
     database.disconnect
     @database.disconnect
@@ -919,7 +919,7 @@ class DurableJobsTest < Minitest::Test
     pid = fork do
       result_read.close
       child_database = Sequel.sqlite(path, timeout: 5_000)
-      child_adapter = Hacienda::Jobs::Adapters::Database.new(
+      child_adapter = Lunula::Jobs::Adapters::Database.new(
         database: child_database,
         lease_seconds: 10,
         heartbeat_interval: 1,
@@ -950,7 +950,7 @@ class DurableJobsTest < Minitest::Test
     sleep 0.08
 
     recovery_database = Sequel.sqlite(path, timeout: 5_000)
-    recovery = Hacienda::Jobs::Adapters::Database.new(
+    recovery = Lunula::Jobs::Adapters::Database.new(
       database: recovery_database,
       lease_seconds: 10,
       heartbeat_interval: 1,
@@ -979,8 +979,8 @@ class DurableJobsTest < Minitest::Test
 
     assert_equal id, execution.id
     assert_equal :lease_lost, execution.status
-    assert_instance_of Hacienda::Durable::LeaseLost, execution.error
-    assert_nil @database[:hacienda_jobs].where(id:).get(:failed_at)
+    assert_instance_of Lunula::Durable::LeaseLost, execution.error
+    assert_nil @database[:lunula_jobs].where(id:).get(:failed_at)
   end
 
   def test_worker_stop_finishes_the_current_job_without_starting_an_event
@@ -993,14 +993,14 @@ class DurableJobsTest < Minitest::Test
     adapter.define_singleton_method(:work_once) do |queue:|
       started << queue
       release.pop
-      Hacienda::Jobs::Execution.new(id: 1, status: :succeeded, error: nil)
+      Lunula::Jobs::Execution.new(id: 1, status: :succeeded, error: nil)
     end
     outbox_calls = 0
     outbox = Object.new
     outbox.define_singleton_method(:dispatch_once) do |events:|
       outbox_calls += 1
     end
-    worker = Hacienda::Jobs::Worker.new(adapter:, outbox:, events: Object.new, poll_interval: 0)
+    worker = Lunula::Jobs::Worker.new(adapter:, outbox:, events: Object.new, poll_interval: 0)
 
     thread = Thread.new { worker.run }
     assert_equal "default", started.pop
@@ -1013,40 +1013,40 @@ class DurableJobsTest < Minitest::Test
   end
 
   def test_enqueue_participates_in_the_callers_database_transaction
-    Hacienda.configure_jobs(adapter: @adapter)
+    Lunula.configure_jobs(adapter: @adapter)
 
     @database.transaction do
-      Hacienda.enqueue(RecorderJob, 3, label: "rolled-back")
+      Lunula.enqueue(RecorderJob, 3, label: "rolled-back")
       raise Sequel::Rollback
     end
 
-    assert_empty @database[:hacienda_jobs]
+    assert_empty @database[:lunula_jobs]
   ensure
-    Hacienda.configure_jobs(adapter: :inline)
+    Lunula.configure_jobs(adapter: :inline)
   end
 
   def test_deliver_later_serializes_mail_for_a_durable_worker
-    Hacienda.configure_mail(delivery: :test, from: "hello@example.test")
-    Hacienda.configure_jobs(adapter: @adapter)
+    Lunula.configure_mail(delivery: :test, from: "hello@example.test")
+    Lunula.configure_jobs(adapter: @adapter)
 
-    Hacienda.mail(
+    Lunula.mail(
       to: "reader@example.test",
       subject: "Durable mail",
       text: "Delivered after restart"
     ).deliver_later
 
-    assert_empty Hacienda.mail_deliveries
+    assert_empty Lunula.mail_deliveries
     execution = adapter.work_once
 
     assert_equal :succeeded, execution.status
-    assert_equal 1, Hacienda.mail_deliveries.length
-    assert_equal "Durable mail", Hacienda.mail_deliveries.first.subject
+    assert_equal 1, Lunula.mail_deliveries.length
+    assert_equal "Durable mail", Lunula.mail_deliveries.first.subject
   end
 
   private
 
   def adapter
-    Hacienda::Jobs::Adapters::Database.new(
+    Lunula::Jobs::Adapters::Database.new(
       database: @database,
       lease_seconds: 60,
       retry_delay: ->(_attempt) { 1 },
@@ -1061,7 +1061,7 @@ class DurableJobsTest < Minitest::Test
   end
 
   def create_workers_table_on(database)
-    database.create_table(:hacienda_job_workers) do
+    database.create_table(:lunula_job_workers) do
       String :id, primary_key: true
       Integer :process_id, null: false
       String :hostname, null: false
@@ -1082,7 +1082,7 @@ class DurableJobsTest < Minitest::Test
   end
 
   def create_queues_table_on(database)
-    database.create_table(:hacienda_job_queues) do
+    database.create_table(:lunula_job_queues) do
       String :queue, primary_key: true
       DateTime :paused_at, null: false
       String :paused_by
@@ -1092,7 +1092,7 @@ class DurableJobsTest < Minitest::Test
   end
 
   def create_jobs_table_on(database)
-    database.create_table(:hacienda_jobs) do
+    database.create_table(:lunula_jobs) do
       primary_key :id
       String :queue, null: false
       Integer :priority, null: false, default: 0

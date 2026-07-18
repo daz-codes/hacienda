@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module Home
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def index(_context, _params)
-      {framework: "Hacienda", command: "hac"}
+      {framework: "Lunula", command: "luna"}
     end
 
     def up(_context, _params)

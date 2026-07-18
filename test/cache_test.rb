@@ -26,7 +26,7 @@ class CacheTest < Minitest::Test
   end
 
   def test_read_write_fetch_and_delete
-    cache = Hacienda::Cache.new
+    cache = Lunula::Cache.new
     calls = 0
 
     assert_equal "value", cache.write("key", "value")
@@ -41,7 +41,7 @@ class CacheTest < Minitest::Test
   end
 
   def test_false_is_cached_but_nil_is_not
-    cache = Hacienda::Cache.new
+    cache = Lunula::Cache.new
     calls = 0
 
     2.times { cache.fetch("false") { calls += 1; false } }
@@ -54,8 +54,8 @@ class CacheTest < Minitest::Test
 
   def test_memory_store_expires_entries
     now = 10.0
-    store = Hacienda::Cache::MemoryStore.new(clock: -> { now })
-    cache = Hacienda::Cache.new(store:)
+    store = Lunula::Cache::MemoryStore.new(clock: -> { now })
+    cache = Lunula::Cache.new(store:)
 
     cache.write("key", "value", expires_in: 5)
     now = 14.9
@@ -66,15 +66,15 @@ class CacheTest < Minitest::Test
   end
 
   def test_expiry_must_be_positive_for_every_store
-    cache = Hacienda::Cache.new(store: Hacienda::Cache::NullStore.new)
+    cache = Lunula::Cache.new(store: Lunula::Cache::NullStore.new)
 
     assert_raises(ArgumentError) { cache.write("key", "value", expires_in: 0) }
     assert_raises(ArgumentError) { cache.fetch("key", expires_in: -1) { "value" } }
   end
 
   def test_memory_store_evicts_the_least_recently_used_entry
-    store = Hacienda::Cache::MemoryStore.new(max_size: 2)
-    cache = Hacienda::Cache.new(store:)
+    store = Lunula::Cache::MemoryStore.new(max_size: 2)
+    cache = Lunula::Cache.new(store:)
     cache.write("one", 1)
     cache.write("two", 2)
     cache.read("one")
@@ -87,8 +87,8 @@ class CacheTest < Minitest::Test
   end
 
   def test_memory_store_is_thread_safe_and_bounded
-    store = Hacienda::Cache::MemoryStore.new(max_size: 25)
-    cache = Hacienda::Cache.new(store:)
+    store = Lunula::Cache::MemoryStore.new(max_size: 25)
+    cache = Lunula::Cache.new(store:)
 
     threads = 8.times.map do |thread|
       Thread.new do
@@ -106,7 +106,7 @@ class CacheTest < Minitest::Test
 
   def test_namespaces_and_pluggable_stores
     store = RecordingStore.new
-    cache = Hacienda::Cache.new(store:, namespace: "blog")
+    cache = Lunula::Cache.new(store:, namespace: "blog")
 
     cache.write(["posts", 1], "post", expires_in: 30)
 
@@ -115,7 +115,7 @@ class CacheTest < Minitest::Test
   end
 
   def test_null_store_never_retains_values
-    cache = Hacienda::Cache.new(store: Hacienda::Cache::NullStore.new)
+    cache = Lunula::Cache.new(store: Lunula::Cache::NullStore.new)
 
     assert_equal "value", cache.write("key", "value")
     assert_nil cache.read("key")
@@ -124,7 +124,7 @@ class CacheTest < Minitest::Test
 
   def test_http_headers_and_freshness
     modified = Time.utc(2026, 6, 28, 12, 0, 0)
-    headers = Hacienda::Cache::HTTP.headers(
+    headers = Lunula::Cache::HTTP.headers(
       etag: ["posts", 1, modified.to_i],
       last_modified: modified,
       public: true,
@@ -144,8 +144,8 @@ class CacheTest < Minitest::Test
       "HTTP_IF_MODIFIED_SINCE" => headers["last-modified"]
     ))
 
-    assert Hacienda::Cache::HTTP.fresh?(etag_request, etag: headers["etag"])
-    assert Hacienda::Cache::HTTP.fresh?(date_request, last_modified: modified)
+    assert Lunula::Cache::HTTP.fresh?(etag_request, etag: headers["etag"])
+    assert Lunula::Cache::HTTP.fresh?(date_request, last_modified: modified)
   end
 
   def test_http_freshness_ignores_conditional_headers_on_writes
@@ -155,6 +155,6 @@ class CacheTest < Minitest::Test
       "HTTP_IF_NONE_MATCH" => "*"
     ))
 
-    refute Hacienda::Cache::HTTP.fresh?(request, etag: %("etag"))
+    refute Lunula::Cache::HTTP.fresh?(request, etag: %("etag"))
   end
 end

@@ -2,26 +2,20 @@
 
 module Auth
   module Repository
-    STORE = Hacienda::Store.new(database: APP.database, table: :users, record: User)
+    extend Lunula::Repository
 
-    module_function
-
-    def find(id)
-      STORE.first(dataset.where(id: id))
-    end
+    store database: APP.database, table: :users, record: User
 
     def find_by_email(email)
-      STORE.first(dataset.where(email: normalize(email)))
+      find_by(email: normalize(email))
     end
 
     def save(user)
       user.email = normalize(user.email)
-      STORE.save(user)
+      super
     end
 
-    def dataset
-      STORE.dataset
-    end
+    private
 
     def normalize(email)
       email.to_s.strip.downcase

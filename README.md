@@ -1,7 +1,7 @@
-# Hacienda
+# Lunula
 
-Hacienda is a lightweight, domain-oriented Ruby web framework. Its command-line
-tool is `hac`, with `fac` provided as an equivalent alias.
+Lunula is a lightweight, domain-oriented Ruby web framework. Its command-line
+tool is `luna`.
 
 The supported application contract is documented in the
 [public API inventory](docs/public-api.md). See the [upgrade policy](docs/upgrading.md),
@@ -11,7 +11,7 @@ changing framework versions.
 The first-stage implementation provides:
 
 - explicit Rack routing in each domain;
-- action methods on fresh `Hacienda::Actions` instances;
+- action methods on fresh `Lunula::Actions` instances;
 - automatically escaped ERB rendering when an action returns a Hash;
 - layouts and partial-based components;
 - HTML helpers for links, buttons, forms, assets, flash, and errors;
@@ -34,8 +34,8 @@ The first-stage implementation provides:
 - app-owned `app/errors/404.erb` and `app/errors/500.erb` templates;
 - CSRF-protected session middleware in generated applications;
 - security headers, configurable CSP, and Rack rate limiting middleware;
-- `hac`/`fac` new, domain, REST, action, migration, auth, start, console, and routes commands;
-- default-on, Idiomorph-powered GET navigation with intent prefetching;
+- `luna` new, domain, REST, action, migration, auth, start, console, and routes commands;
+- default-on Morpheus GET navigation with intent prefetching and Idiomorph morphing;
 - local Helium assets in every generated app, using its CSP-safe runtime by
   default with no Node.js runtime.
 
@@ -45,41 +45,41 @@ From this repository:
 
 ```sh
 bundle install
-bundle exec ruby -Ilib exe/hac new blog
+bundle exec ruby -Ilib exe/luna new blog
 cd blog
 bundle install
-bundle exec hac db:migrate
-bundle exec hac start
+bundle exec luna db:migrate
+bundle exec luna start
 ```
 
 Open a console with the application environment loaded:
 
 ```sh
-bundle exec hac console
+bundle exec luna console
 ```
 
 Inspect the application’s explicit routes, action methods, and guards:
 
 ```sh
-bundle exec hac routes
-bundle exec hac routes --domain posts
-bundle exec hac routes GET /posts/42
-bundle exec hac routes /posts/42
+bundle exec luna routes
+bundle exec luna routes --domain posts
+bundle exec luna routes GET /posts/42
+bundle exec luna routes /posts/42
 ```
 
 The route table includes the owning domain and declaration source. A lookup with
-an HTTP method shows the route Hacienda would dispatch; a path-only lookup shows
+an HTTP method shows the route Lunula would dispatch; a path-only lookup shows
 the selected route for every matching verb.
 
 Manage migrations and seeds without going through Rake:
 
 ```sh
-bundle exec hac db:migrate
-bundle exec hac db:rollback       # rolls back one migration
-bundle exec hac db:rollback 3     # rolls back three migrations
-bundle exec hac db:seed
-bundle exec hac db:check
-bundle exec hac db:checkpoint --mode TRUNCATE
+bundle exec luna db:migrate
+bundle exec luna db:rollback       # rolls back one migration
+bundle exec luna db:rollback 3     # rolls back three migrations
+bundle exec luna db:seed
+bundle exec luna db:check
+bundle exec luna db:checkpoint --mode TRUNCATE
 ```
 
 `db:seed` only loads `db/seeds.rb`; run migrations explicitly first. The
@@ -133,8 +133,8 @@ Generated applications include Docker and Kamal 2 templates. See the
 [deployment guide](docs/deployment.md) for secrets, health checks, migrations,
 SQLite persistence, HTTPS, and multi-server constraints.
 
-Useful objects like `DB`, domain constants, repositories, `Hacienda.env`, and
-`Hacienda.credentials` are available because the command boots
+Useful objects like `DB`, domain constants, repositories, `Lunula.env`, and
+`Lunula.credentials` are available because the command boots
 `config/application.rb`.
 
 A generated route:
@@ -147,7 +147,7 @@ maps to:
 
 ```ruby
 module Posts
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def show(_context, params)
       {post: Repository.find(params[:id])}
     end
@@ -158,12 +158,12 @@ end
 and renders `app/domains/posts/views/show.erb`.
 
 Business routes belong in `app/domains/<domain>/routes.rb`. The file determines
-the owning domain and therefore the action namespace; Hacienda deliberately has
+the owning domain and therefore the action namespace; Lunula deliberately has
 no second global business-route file. Rack infrastructure such as static files,
 the jobs dashboard, and the development mail inbox remains mounted explicitly
 in `config.ru`.
 
-Hacienda rejects route collisions while the application boots or reloads. This
+Lunula rejects route collisions while the application boots or reloads. This
 includes normalized duplicates, structurally equivalent dynamic paths such as
 `/posts/:id` and `/posts/:slug`, and equal-specificity patterns that can match
 the same concrete request. Different HTTP verbs and intentional static
@@ -172,7 +172,7 @@ precedence such as `/posts/new` over `/posts/:id` remain valid.
 Generate a standalone migration with:
 
 ```sh
-bundle exec hac generate migration add_excerpt_to_posts
+bundle exec luna generate migration add_excerpt_to_posts
 ```
 
 Set cross-request feedback before redirecting:
@@ -187,7 +187,7 @@ Validate domain objects without adding a model framework:
 ```ruby
 module Posts
   class Post
-    include Hacienda::Validations
+    include Lunula::Validations
 
     def validate
       errors.add :title, "is required" if title.to_s.strip.empty?
@@ -198,51 +198,46 @@ end
 return render(:new, post:, errors: post.errors, status: 422) if post.invalid?
 ```
 
-Use the optional attributes and Store primitives to remove repetitive row
-mapping while keeping repositories explicit:
+Use the optional attributes and repository facade to remove repetitive setup
+and row mapping while keeping repositories explicit:
 
 ```ruby
 module Posts
   class Post
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
 
     attributes :id, :published_at, :created_at, :updated_at
     attribute :title, default: ""
   end
 
   module Repository
-    STORE = Hacienda::Store.new(
+    extend Lunula::Repository
+
+    store(
       database: APP.database,
       table: :posts,
       record: Post
     )
 
-    module_function
-
     def published
-      STORE.all(
-        STORE.dataset.exclude(published_at: nil).reverse_order(:published_at)
-      )
+      all(dataset.exclude(published_at: nil).reverse_order(:published_at))
     end
-
-    def find(id) = STORE.find(id)
-    def save(post) = STORE.save(post)
   end
 end
 ```
 
-`STORE.dataset` is the underlying Sequel dataset. Pass any custom dataset to
-`STORE.all` or `STORE.first`, or map a row directly with `STORE.load`. This
-keeps custom queries on Sequel without reintroducing `Post.new(**row)` in every
-finder.
+`dataset` is the underlying Sequel dataset. Pass a custom dataset to `all` or
+`first`; use the inherited `find`, `find_by`, `find_by!`, `save`, `delete`,
+`load`, and `refresh` operations for ordinary persistence. Custom query methods
+become module methods naturally because the repository extends the facade.
 
 Persistence coercion is explicit and belongs to the Store, not the domain
 object. For example, a JSON text column can opt into separate load and dump
 functions:
 
 ```ruby
-STORE = Hacienda::Store.new(
+store(
   database: APP.database,
   table: :workouts,
   record: Workout,
@@ -259,7 +254,7 @@ Store performs partial updates using `record.changed_attributes`; unchanged
 persisted records are a no-op. It owns `created_at` and `updated_at` when those
 attributes are declared. Inserts are refreshed by default so database defaults
 are available in memory; updates trust the in-memory values unless Store is
-configured with `refresh: :always`. Call `STORE.refresh(record)` explicitly
+configured with `refresh: :always`. Call `Repository.refresh(record)` explicitly
 when database triggers or defaults need to be reloaded.
 
 The default `refresh: :insert` performs one `SELECT` after every insert. For an
@@ -267,7 +262,7 @@ insert-heavy path that does not use database defaults or triggers, configure
 `refresh: false` to avoid that round trip:
 
 ```ruby
-STORE = Hacienda::Store.new(
+store(
   database: APP.database,
   table: :events,
   record: Event,
@@ -279,7 +274,7 @@ Optimistic locking is opt-in:
 
 ```ruby
 attribute :lock_version, default: 0
-STORE = Hacienda::Store.new(
+store(
   database: APP.database,
   table: :posts,
   record: Post,
@@ -287,7 +282,7 @@ STORE = Hacienda::Store.new(
 )
 ```
 
-A conflicting update raises `Hacienda::Store::StaleObject`; it never returns a
+A conflicting update raises `Lunula::Store::StaleObject`; it never returns a
 false success. Dirty state is cleared only after the database transaction
 commits, so a rollback preserves the record's changes. Store deliberately has
 no identity map: two finds return independent instances.
@@ -337,13 +332,13 @@ Nested form data is normalized to symbol keys:
 attributes = params.require(:post).permit(:title, :body)
 ```
 
-If a required param is missing or empty, Hacienda returns `400 Bad Request`.
+If a required param is missing or empty, Lunula returns `400 Bad Request`.
 
 JSON request bodies use the same nested normalization and whitelisting:
 
 ```ruby
 module Posts
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def create(_context, params)
       attributes = params.require(:post).permit(:title, :body)
       json Repository.create(attributes), status: 201
@@ -393,27 +388,27 @@ Use small HTML helpers when they reduce boilerplate:
 Read encrypted credentials:
 
 ```ruby
-Hacienda.credentials.dig(:mail, :smtp_password)
+Lunula.credentials.dig(:mail, :smtp_password)
 ```
 
 Generated apps store encrypted secrets in `config/credentials.yml.enc`. The
 local `config/master.key` is ignored by git; production can use
-`HACIENDA_MASTER_KEY`. Hacienda writes `config/master.key` with `0600`
+`LUNULA_MASTER_KEY`. Lunula writes `config/master.key` with `0600`
 permissions; keep deployment secret files such as `.kamal/secrets` owner-readable
 only as well.
 
 ```sh
-bundle exec hac credentials:show
-bundle exec hac credentials:edit
+bundle exec luna credentials:show
+bundle exec luna credentials:edit
 ```
 
 Send mail without mailer classes:
 
 ```ruby
-Hacienda.mail(
+Lunula.mail(
   to: "reader@example.com",
   subject: "Welcome",
-  text: "Hello from Hacienda"
+  text: "Hello from Lunula"
 ).deliver_later
 ```
 
@@ -435,16 +430,16 @@ module Posts
   end
 end
 
-Hacienda.enqueue Posts::PublishWebhookJob, post.id
-Hacienda.enqueue_in 30, Posts::PublishWebhookJob, post.id
-Hacienda.enqueue_at Time.now + 3600, Posts::PublishWebhookJob, post.id
+Lunula.enqueue Posts::PublishWebhookJob, post.id
+Lunula.enqueue_in 30, Posts::PublishWebhookJob, post.id
+Lunula.enqueue_at Time.now + 3600, Posts::PublishWebhookJob, post.id
 ```
 
 Lower priority numbers run first. Jobs with the same priority are ordered by
 their scheduled time and then insertion ID. Declare a default on the job module
 with `def self.priority = 10`; the default is `0`.
 
-Use `Hacienda.enqueue` when the work is independent of an open database
+Use `Lunula.enqueue` when the work is independent of an open database
 transaction. When a job depends on data being committed, enqueue it through the
 transaction:
 
@@ -457,7 +452,7 @@ end
 ```
 
 The database adapter inserts that job in the same Sequel transaction. A durable
-external adapter declares its capabilities and uses `hacienda_job_outbox` for a
+external adapter declares its capabilities and uses `lunula_job_outbox` for a
 crash-safe hand-off after commit. Inline, async, and test adapters run through a
 Sequel `after_commit` callback and are discarded on rollback. Nested savepoint
 rollbacks are respected in every case.
@@ -476,14 +471,14 @@ worker also recovers jobs owned by a worker whose registry heartbeat has
 expired, without waiting for the longer lease deadline.
 
 Timeouts are deliberately cooperative, avoiding unsafe forced termination of a
-Ruby thread. Set a default with `HACIENDA_JOB_TIMEOUT`, or declare one per job:
+Ruby thread. Set a default with `LUNULA_JOB_TIMEOUT`, or declare one per job:
 
 ```ruby
 def self.timeout = 30
 
 def self.perform(record_ids)
   record_ids.each do |id|
-    Hacienda::Jobs.checkpoint!
+    Lunula::Jobs.checkpoint!
     process(id)
   end
 end
@@ -497,30 +492,30 @@ as successful.
 Run a worker and inspect or retry terminal failures:
 
 ```sh
-bundle exec hac jobs:work
-bundle exec hac jobs:work --queue critical,default --threads 4 --batch-size 20
-bundle exec hac jobs:work --all-queues --threads 4 --batch-size 20
-bundle exec hac jobs:status
-bundle exec hac jobs:health
-bundle exec hac jobs:benchmark --jobs 1000 --threads 2 --batch-size 10
-bundle exec hac jobs:list pending
-bundle exec hac jobs:list completed --limit 20
-bundle exec hac jobs:failed
-bundle exec hac jobs:scheduled
-bundle exec hac jobs:prune --completed 604800 --discarded 2592000 --failed 2592000
-bundle exec hac jobs:pause mailers
-bundle exec hac jobs:resume mailers
-bundle exec hac jobs:recurring
-bundle exec hac jobs:schedule
-bundle exec hac jobs:cancel 42
-bundle exec hac jobs:discard 42 "no longer needed"
-bundle exec hac jobs:reschedule 42 300
-bundle exec hac jobs:retry job 42
-bundle exec hac jobs:retry handoff 9
-bundle exec hac jobs:retry event 17
+bundle exec luna jobs:work
+bundle exec luna jobs:work --queue critical,default --threads 4 --batch-size 20
+bundle exec luna jobs:work --all-queues --threads 4 --batch-size 20
+bundle exec luna jobs:status
+bundle exec luna jobs:health
+bundle exec luna jobs:benchmark --jobs 1000 --threads 2 --batch-size 10
+bundle exec luna jobs:list pending
+bundle exec luna jobs:list completed --limit 20
+bundle exec luna jobs:failed
+bundle exec luna jobs:scheduled
+bundle exec luna jobs:prune --completed 604800 --discarded 2592000 --failed 2592000
+bundle exec luna jobs:pause mailers
+bundle exec luna jobs:resume mailers
+bundle exec luna jobs:recurring
+bundle exec luna jobs:schedule
+bundle exec luna jobs:cancel 42
+bundle exec luna jobs:discard 42 "no longer needed"
+bundle exec luna jobs:reschedule 42 300
+bundle exec luna jobs:retry job 42
+bundle exec luna jobs:retry handoff 9
+bundle exec luna jobs:retry event 17
 ```
 
-`hac jobs:work --once` performs one polling cycle. Repeat `--queue`, or pass a
+`luna jobs:work --once` performs one polling cycle. Repeat `--queue`, or pass a
 comma-separated ordered list; `--all-queues` selects every queue. `--threads`,
 `--batch-size`, and `--poll` control execution concurrency, claiming, and idle
 latency. Selected queues are served in a fair round-robin cycle so a permanently
@@ -530,13 +525,13 @@ scheduled-time, and ID ordering.
 Delivery is at least once, not exactly once: jobs must be safe to retry. Multiple
 worker processes atomically claim distinct leases. Active worker identity,
 process, host, queues, concurrency, heartbeat, and workload are recorded in
-`hacienda_job_workers`; graceful shutdown finishes the currently claimed batch
+`lunula_job_workers`; graceful shutdown finishes the currently claimed batch
 without claiming more work.
 
-`HACIENDA_JOB_LEASE_SECONDS`, `HACIENDA_JOB_HEARTBEAT_INTERVAL`,
-`HACIENDA_JOB_TIMEOUT`, and `HACIENDA_JOB_WORKER_TIMEOUT` configure the safety
-intervals. `HACIENDA_JOB_COMPLETED_RETENTION`,
-`HACIENDA_JOB_DISCARDED_RETENTION`, and `HACIENDA_JOB_FAILED_RETENTION`
+`LUNULA_JOB_LEASE_SECONDS`, `LUNULA_JOB_HEARTBEAT_INTERVAL`,
+`LUNULA_JOB_TIMEOUT`, and `LUNULA_JOB_WORKER_TIMEOUT` configure the safety
+intervals. `LUNULA_JOB_COMPLETED_RETENTION`,
+`LUNULA_JOB_DISCARDED_RETENTION`, and `LUNULA_JOB_FAILED_RETENTION`
 configure the default age used by `jobs:prune`; pass explicit `--completed`,
 `--discarded`, or `--failed` seconds to override those defaults for one run.
 
@@ -561,16 +556,16 @@ runs a WAL checkpoint, and deletes only its own benchmark job rows unless
 window, after `db:check`:
 
 ```sh
-bundle exec hac db:check
-bundle exec hac jobs:benchmark --jobs 1000 --retry-jobs 25 --web-requests 250 --web-path /up --outbox-items 100 --threads 2 --batch-size 10 --latency-samples 100
+bundle exec luna db:check
+bundle exec luna jobs:benchmark --jobs 1000 --retry-jobs 25 --web-requests 250 --web-path /up --outbox-items 100 --threads 2 --batch-size 10 --latency-samples 100
 ```
 
 For the generated single-host SQLite deployment, start with one web process,
 one worker process, WAL mode, a 5 second busy-timeout, `--threads 2`,
 `--batch-size 5..10`, and `--poll 0.25..1.0`. Keep
-`HACIENDA_JOB_LEASE_SECONDS` comfortably above the longest normal job,
-`HACIENDA_JOB_HEARTBEAT_INTERVAL` below one third of the lease, and set
-explicit per-job or default `HACIENDA_JOB_TIMEOUT` values for slow external
+`LUNULA_JOB_LEASE_SECONDS` comfortably above the longest normal job,
+`LUNULA_JOB_HEARTBEAT_INTERVAL` below one third of the lease, and set
+explicit per-job or default `LUNULA_JOB_TIMEOUT` values for slow external
 I/O.
 
 Treat sustained `SQLITE_BUSY` errors, `jobs:health` warnings that do not clear,
@@ -579,16 +574,16 @@ above roughly 100-250ms under normal load, or WAL growth that needs frequent
 manual checkpoints as signals to reduce worker concurrency or move the queue to
 a client/server database through Sequel.
 
-When SQLite busy/locked errors repeat in a short window, Hacienda logs a
+When SQLite busy/locked errors repeat in a short window, Lunula logs a
 throttled warning beginning with `sqlite_busy_contention`. Those warnings include
 the source (`request`, `jobs`, `job_outbox`, `event_outbox`, or
 `durable_queue`) and route or table metadata so you can distinguish ordinary
 single write collisions from sustained write contention.
 
-Generated apps mount a read-only queue dashboard at `/hac/jobs`, with JSON
-health at `/hac/jobs/health`. Development access is local-only. Production
-access requires `HACIENDA_DASHBOARD_PASSWORD` and uses HTTP Basic auth, with
-username `hacienda` unless `HACIENDA_DASHBOARD_USERNAME` is set. The dashboard
+Generated apps mount a read-only queue dashboard at `/luna/jobs`, with JSON
+health at `/luna/jobs/health`. Development access is local-only. Production
+access requires `LUNULA_DASHBOARD_PASSWORD` and uses HTTP Basic auth, with
+username `lunula` unless `LUNULA_DASHBOARD_USERNAME` is set. The dashboard
 checks local development access with the direct `REMOTE_ADDR` socket address,
 not spoofable forwarding headers. It is an operational view over the existing
 queue tables, not a required runtime dependency.
@@ -597,11 +592,11 @@ Bulk enqueue accepts explicit job entries and uses the database adapter’s bulk
 insert path when available:
 
 ```ruby
-ids = Hacienda.enqueue_all([
+ids = Lunula.enqueue_all([
   {job: Reports::GenerateJob, args: [user.id], kwargs: {}},
   {job: Reports::GenerateJob, args: [other_user.id], kwargs: {}}
 ]) do |inserted_ids|
-  Hacienda.logger.info("enqueued #{inserted_ids.length} report jobs")
+  Lunula.logger.info("enqueued #{inserted_ids.length} report jobs")
 end
 ```
 
@@ -637,14 +632,14 @@ end
 
 Uniqueness is enforced at enqueue time until `unique_for` expires. The default
 conflict behavior is `:keep`, which returns the existing job ID; `:raise`
-raises `Hacienda::Jobs::Error`. Concurrency limits are enforced when workers
+raises `Lunula::Jobs::Error`. Concurrency limits are enforced when workers
 claim jobs. Jobs blocked by a concurrency limit remain visible through
-`hac jobs:list blocked`, and `jobs:status` includes a blocked count. A worker
+`luna jobs:list blocked`, and `jobs:status` includes a blocked count. A worker
 crash releases concurrency naturally when abandoned leases are recovered.
 
 Queues can be paused and resumed operationally. Pausing a queue records it in
-`hacienda_job_queues`, blocks pending work with a visible reason, and prevents
-future claims until `hac jobs:resume QUEUE` is run. Lifecycle operations are
+`lunula_job_queues`, blocks pending work with a visible reason, and prevents
+future claims until `luna jobs:resume QUEUE` is run. Lifecycle operations are
 explicit: `jobs:cancel` requests cooperative cancellation for running work or
 cancels pending work; `jobs:discard` only discards unlocked active jobs;
 `jobs:reschedule` only moves unlocked active jobs to a future time; and
@@ -672,7 +667,7 @@ end
 ```
 
 The built-in adapters declare their capabilities explicitly. External and
-cross-database durable adapters require `Hacienda::Jobs::Outbox`; Hacienda will
+cross-database durable adapters require `Lunula::Jobs::Outbox`; Lunula will
 raise instead of silently weakening transaction safety when it is absent.
 The database and async adapters honor delayed execution and priorities. The
 test adapter records that metadata; the inline adapter intentionally performs
@@ -682,8 +677,8 @@ Subscribe to job lifecycle notifications when you want application logging or
 metrics without a monitoring dependency:
 
 ```ruby
-Hacienda::Jobs.subscribe do |event, payload|
-  Hacienda.logger.info("job.#{event} #{payload.inspect}")
+Lunula::Jobs.subscribe do |event, payload|
+  Lunula.logger.info("job.#{event} #{payload.inspect}")
 end
 ```
 
@@ -692,18 +687,18 @@ The built-in database adapter emits `:enqueue`, `:start`, `:finish`, `:retry`,
 
 ### Queue capability matrix
 
-| Capability | Hacienda database queue | Solid Queue comparison |
+| Capability | Lunula database queue | Solid Queue comparison |
 | --- | --- | --- |
 | Durable database-backed jobs | Supported through Sequel tables | Comparable goal |
 | Transactional enqueue with app writes | Supported when using the same Sequel database | Comparable goal |
-| External adapter hand-off after commit | Supported through `hacienda_job_outbox` | Hacienda-specific |
+| External adapter hand-off after commit | Supported through `lunula_job_outbox` | Lunula-specific |
 | Delayed jobs and priorities | Supported | Comparable goal |
 | Multiple queues and worker selection | Supported with ordered queues or all-queue priority mode | Comparable goal |
 | Atomic batch claiming | Supported | Comparable goal |
 | Retries and failed-job visibility | Supported | Comparable goal |
 | Lease renewal and crash recovery | Supported | Comparable goal |
 | Worker registry and health checks | Supported | Comparable goal |
-| Recurring jobs | Supported with Hacienda's narrow interval syntax | Intentional narrower design |
+| Recurring jobs | Supported with Lunula's narrow interval syntax | Intentional narrower design |
 | Uniqueness and concurrency limits | Supported opt-in per job | Comparable operational feature |
 | Pause/resume/cancel/discard/reschedule | Supported through explicit CLI commands | Comparable operational feature |
 | Dashboard | Read-only built-in dashboard | Narrower than Rails ecosystem dashboards |
@@ -729,13 +724,13 @@ tasks:
 The schedule syntax is deliberately narrow and dependency-free: use integer
 seconds or interval strings such as `5 minutes`, `1 hour`, or `1 day`. The
 scheduler aligns each task to interval slots and records `(task_name,
-scheduled_at)` in `hacienda_recurring_runs`, protected by a unique index, so
+scheduled_at)` in `lunula_recurring_runs`, protected by a unique index, so
 multiple scheduler processes do not enqueue the same slot twice.
 
-Run the scheduler with `hac jobs:schedule`; use `--once` for a single tick.
-Inspect and validate tasks with `hac jobs:recurring`, manually trigger one with
-`hac jobs:recurring run cleanup`, and toggle YAML `enabled` state with
-`hac jobs:recurring disable cleanup` or `hac jobs:recurring enable cleanup`.
+Run the scheduler with `luna jobs:schedule`; use `--once` for a single tick.
+Inspect and validate tasks with `luna jobs:recurring`, manually trigger one with
+`luna jobs:recurring run cleanup`, and toggle YAML `enabled` state with
+`luna jobs:recurring disable cleanup` or `luna jobs:recurring enable cleanup`.
 
 Durable arguments use JSON-style hash semantics. Top-level keyword argument
 keys are restored as symbols so Ruby keyword calls work; keys in nested hashes
@@ -759,10 +754,10 @@ end
 Pass the Sequel database and optional outbox when constructing the application:
 
 ```ruby
-APP = Hacienda::Application.new(
+APP = Lunula::Application.new(
   root: APP_ROOT,
   database: DB,
-  outbox: Hacienda::Events::Outbox.new(database: DB)
+  outbox: Lunula::Events::Outbox.new(database: DB)
 )
 ```
 
@@ -793,7 +788,7 @@ distributed pub/sub system.
 Use a recorder in tests:
 
 ```ruby
-recorder = Hacienda::Events::Recorder.new
+recorder = Lunula::Events::Recorder.new
 subscription = APP.events.subscribe(Posts::Events::Published, recorder)
 
 # perform the command
@@ -808,13 +803,13 @@ complete reload-safe registration setup.
 Generate and verify signed tokens:
 
 ```ruby
-token = Hacienda.signed_token.generate(
+token = Lunula.signed_token.generate(
   { user_id: user.id },
   purpose: "email_verification",
   expires_in: 24 * 60 * 60
 )
 
-payload = Hacienda.signed_token.verify(token, purpose: "email_verification")
+payload = Lunula.signed_token.verify(token, purpose: "email_verification")
 ```
 
 Generated auth includes email verification, magic-link login, and password reset
@@ -847,60 +842,60 @@ missing user, unknown role, or policy error must never grant access. Test both
 the allowed owner and a different authenticated user through the full Rack
 stack.
 
-Generated apps require `HACIENDA_SESSION_SECRET` or `SESSION_SECRET` in
+Generated apps require `LUNULA_SESSION_SECRET` or `SESSION_SECRET` in
 production. Development keeps a visible fallback secret so local apps boot
 without setup. Cookie sessions expire after 30 days by default; override that
-with `HACIENDA_SESSION_EXPIRE_AFTER` in seconds. To rotate the session secret
+with `LUNULA_SESSION_EXPIRE_AFTER` in seconds. To rotate the session secret
 without immediately logging everyone out, deploy the new value as
-`HACIENDA_SESSION_SECRET` and keep the previous value in
-`HACIENDA_SESSION_SECRET_OLD` until old cookies have expired. Multiple old
+`LUNULA_SESSION_SECRET` and keep the previous value in
+`LUNULA_SESSION_SECRET_OLD` until old cookies have expired. Multiple old
 secrets may be comma-separated.
 
-Hacienda's default sessions are encrypted client-side cookies. That keeps the
+Lunula's default sessions are encrypted client-side cookies. That keeps the
 stack small and fast, but it also means logout cannot revoke a stolen cookie
 that was copied before logout; it remains usable until expiry or secret
 rotation. Use short expiries for sensitive applications. Set
-`HACIENDA_SESSION_STORE=database` to store session payloads in Sequel instead;
+`LUNULA_SESSION_STORE=database` to store session payloads in Sequel instead;
 that keeps only an opaque id in the browser, uses the generated
-`hacienda_sessions` table, and allows server-side revocation by deleting rows.
+`lunula_sessions` table, and allows server-side revocation by deleting rows.
 Expired database sessions can be pruned with
-`Hacienda::SessionStore#prune_expired`.
+`Lunula::SessionStore#prune_expired`.
 
-Generated auth emails use `Hacienda.app_url`, not the request `Host` header, so
+Generated auth emails use `Lunula.app_url`, not the request `Host` header, so
 password reset and verification links come from one canonical origin. Configure
-that origin with `HACIENDA_APP_URL`, legacy `APP_URL`, or
-`credentials.hacienda.app_url`; production requires one of them. Generated
+that origin with `LUNULA_APP_URL`, legacy `APP_URL`, or
+`credentials.lunula.app_url`; production requires one of them. Generated
 production apps also derive their default host allowlist from that canonical
-URL. Set `HACIENDA_ALLOWED_HOSTS` to a comma-separated list when a deployment
+URL. Set `LUNULA_ALLOWED_HOSTS` to a comma-separated list when a deployment
 needs additional accepted hosts.
 
 Generated apps also include security headers, a default Content Security Policy,
 and rate limits for auth-sensitive POST routes. Configure those in `config.ru`:
 
 ```ruby
-use Hacienda::Middleware::HostAuthorization,
+use Lunula::Middleware::HostAuthorization,
   hosts: ["example.com"]
 
-use Hacienda::Middleware::SecurityHeaders,
-  hsts: Hacienda.env.production?,
+use Lunula::Middleware::SecurityHeaders,
+  hsts: Lunula.env.production?,
   csp: {
     "default-src" => ["'self'"],
     "script-src" => ["'self'", :nonce],
     "style-src" => ["'self'", :nonce]
   }
 
-use Hacienda::Middleware::RateLimiter,
+use Lunula::Middleware::RateLimiter,
   rules: [
     {method: "POST", path: "/login", limit: 10, period: 60}
   ]
 ```
 
-`Hacienda::Middleware::RequestLimits` is the first generated middleware. Its
+`Lunula::Middleware::RequestLimits` is the first generated middleware. Its
 defaults are a 10 MiB body, 64 KiB query string, 16 uploaded files, 128 total
 multipart parts, 1,024 parameters, and 16 levels of nesting. Override them with
-`HACIENDA_MAX_REQUEST_BYTES`, `HACIENDA_MAX_QUERY_BYTES`,
-`HACIENDA_MAX_MULTIPART_FILES`, `HACIENDA_MAX_MULTIPART_PARTS`,
-`HACIENDA_MAX_PARAMETERS`, and `HACIENDA_MAX_PARAMETER_DEPTH`. Exceeded bodies
+`LUNULA_MAX_REQUEST_BYTES`, `LUNULA_MAX_QUERY_BYTES`,
+`LUNULA_MAX_MULTIPART_FILES`, `LUNULA_MAX_MULTIPART_PARTS`,
+`LUNULA_MAX_PARAMETERS`, and `LUNULA_MAX_PARAMETER_DEPTH`. Exceeded bodies
 and multipart counts return stable `413` responses; malformed or over-complex
 parameters return stable `400` responses.
 
@@ -963,15 +958,15 @@ to a new entry.
 can all execute the block, including across Puma threads, workers, and hosts.
 Likewise, nil-returning work repeats because nil is not negatively cached. Use
 an application-specific per-key/distributed lock or an explicit cached sentinel
-when either behavior matters; Hacienda does not impose those semantics on every
+when either behavior matters; Lunula does not impose those semantics on every
 cache.
 
 The built-in `MemoryStore` is thread-safe, TTL-aware, and bounded with
 least-recently-used eviction:
 
 ```ruby
-store = Hacienda::Cache::MemoryStore.new(max_size: 1_000)
-Hacienda.configure_cache(store:, namespace: "blog")
+store = Lunula::Cache::MemoryStore.new(max_size: 1_000)
+Lunula.configure_cache(store:, namespace: "blog")
 ```
 
 At capacity, the memory store finds the least-recently-used entry with an O(n)
@@ -985,7 +980,7 @@ silently creating inconsistent per-worker caches. A production adapter only
 needs `read(key)`, `write(key, value, expires_in:)`, and `delete(key)`:
 
 ```ruby
-Hacienda.configure_cache(store: RedisCacheStore.new(redis), namespace: "blog")
+Lunula.configure_cache(store: RedisCacheStore.new(redis), namespace: "blog")
 ```
 
 Cache partial or component output in ERB with a block that returns safe HTML:
@@ -1014,7 +1009,7 @@ and HEAD requests as conditionally fresh.
 
 ## File uploads and storage
 
-Rack parses multipart forms; Hacienda turns the resulting upload into explicit
+Rack parses multipart forms; Lunula turns the resulting upload into explicit
 storage metadata. Forms opt into multipart encoding normally:
 
 ```erb
@@ -1034,15 +1029,15 @@ blob = context.storage.store(
   prefix: "post-covers",
   max_bytes: 5 * 1024 * 1024,
   content_types: ["image/jpeg", "image/png", "image/webp"],
-  content_inspector: Hacienda::Storage::ContentTypeInspector.new
+  content_inspector: Lunula::Storage::ContentTypeInspector.new
 )
 
 post.attach_cover(blob)
 ```
 
-`Storage#store` returns a `Hacienda::Storage::Blob` containing `key`, sanitized
+`Storage#store` returns a `Lunula::Storage::Blob` containing `key`, sanitized
 original `filename`, declared `content_type`, `byte_size`, SHA-256 `checksum`,
-and `url`. Hacienda does not create a blobs table: persist the fields the domain
+and `url`. Lunula does not create a blobs table: persist the fields the domain
 needs in its own repository. Generated keys use a date, random UUID, and safe
 extension; explicit keys reject absolute paths, traversal, empty segments, and
 backslashes.
@@ -1064,7 +1059,7 @@ Generated apps use `DiskService` in development, `MemoryService` in tests, and
 `url(key)`. Services must make `overwrite: false` an atomic create-if-absent
 operation; the built-in disk and memory services guarantee this.
 
-`Hacienda::Middleware::StorageFiles` serves local disk/memory files at
+`Lunula::Middleware::StorageFiles` serves local disk/memory files at
 `/uploads`. It streams bodies, blocks traversal, adds `nosniff` and a sandboxed
 CSP, and only renders a conservative image allowlist inline; HTML, SVG, and
 other types are forced to download. Remote object-storage adapters set
@@ -1120,7 +1115,7 @@ readable source files. Before a non-Docker production deployment, compile the
 asset manifest:
 
 ```sh
-bundle exec hac assets:precompile
+bundle exec luna assets:precompile
 ```
 
 Compilation writes deterministic SHA-256 fingerprinted copies and
@@ -1129,42 +1124,42 @@ references are rewritten to their fingerprinted dependencies, so changing a
 dependency also changes the importing asset's URL. No Node.js runtime is
 required. Generated Dockerfiles run compilation during the image build.
 
-`Hacienda::Assets.rack_options(root: APP_ROOT)` configures logical assets with
+`Lunula::Assets.rack_options(root: APP_ROOT)` configures logical assets with
 `Cache-Control: no-cache` and fingerprinted assets with a one-year immutable
 cache policy. Production helpers fail with an actionable error when the
 manifest or a requested entry is missing. Remove compiled outputs without
-touching sources with `bundle exec hac assets:clobber`.
+touching sources with `bundle exec luna assets:clobber`.
 
 ## Pending migrations
 
-`hac start` checks the configured database before executing Rackup and refuses
+`luna start` checks the configured database before executing Rackup and refuses
 to start with an actionable list when migrations are pending:
 
 ```text
 2 pending migrations:
   20260717090000_create_posts.rb
   20260717090100_add_post_status.rb
-Run: bundle exec hac db:migrate
+Run: bundle exec luna db:migrate
 ```
 
 The generated Rack stack performs the same check for direct `rackup` use.
 Development receives a `503` page listing the pending files and recovery
 command. Production receives a generic `503` while the details are logged.
-Hacienda never applies migrations automatically at web-process boot.
+Lunula never applies migrations automatically at web-process boot.
 
 ## Development mail
 
 Development mail is written to `tmp/mail` and is available through the local
-inbox at `/hac/mail`. The inbox lists messages, previews text, extracts links,
+inbox at `/luna/mail`. The inbox lists messages, previews text, extracts links,
 shows raw source, and renders HTML inside a script- and form-disabled sandbox.
 It uses the direct socket address for its local-only gate and is unavailable in
 production.
 
 ## Navigation
 
-Generated applications enable Hacienda Navigation by default. Same-origin GET
-links fetch and morph the single `#hacienda-page` target using the vendored
-Idiomorph library. The layout remains in place while the URL, title, focus,
+Generated applications vendor and enable the `@lunula/morpheus` package by
+default. Same-origin GET links fetch and morph the single `#morpheus-page`
+target using Idiomorph. The layout remains in place while the URL, title, focus,
 scroll position, active navigation links, and browser history are updated.
 Likely destinations are prefetched after hover, focus, or touch intent and held
 in a small, time-limited cache.
@@ -1173,7 +1168,7 @@ The generated layout shows the complete integration:
 
 ```erb
 <title><%= document_title %></title>
-<%= hacienda_navigation context %>
+<%= morpheus_navigation context %>
 <body>
   <%= navigation_page content, context: context %>
   <%= javascript_include "helium-csp.js", module: true %>
@@ -1184,7 +1179,7 @@ Set a response title in a view with `page_title "Posts"`. Configure or disable
 navigation at application construction:
 
 ```ruby
-APP = Hacienda::Application.new(
+APP = Lunula::Application.new(
   root: APP_ROOT,
   navigation: {prefetch: :intent, cache_size: 20, cache_ttl: 15}
 )
@@ -1195,12 +1190,12 @@ APP = Hacienda::Application.new(
 Helium remains independent. Its `MutationObserver` is the official integration
 mechanism: newly inserted nodes are bound, removed nodes are cleaned up, and
 unchanged nodes retain their state. If a preserved node's Helium directive
-attributes (`@...`, `:...`, or `data-he...`) change, Hacienda replaces that node
-so Helium can bind the new directives safely. Hacienda does not perform a
+attributes (`@...`, `:...`, or `data-he...`) change, Morpheus replaces that node
+so Helium can bind the new directives safely. Morpheus does not perform a
 Turbo-style global teardown and reinitialization.
 
-`hac new` copies the Helium runtime and license bundled with the installed
-Hacienda gem, so generation does not depend on Node.js, `node_modules`, or a
+`luna new` copies the Helium runtime and license bundled with the installed
+Lunula gem, so generation does not depend on Node.js, `node_modules`, or a
 sibling Helium checkout. Framework contributors can set `HELIUM_PATH` to an
 alternative `helium.js` for an explicit integration test; its directory must
 also contain the CSP, SSE, jexpr, and `LICENSE` files copied by the generator.
@@ -1209,28 +1204,28 @@ Helium's Server-Sent Events support is available as an optional add-on. New
 applications vendor `helium-sse.js` and `helium-csp-sse.js` beside the default
 assets. If a page uses Helium requests that expect `text/event-stream`, load
 `/assets/helium-csp-sse.js` instead of `/assets/helium-csp.js` in that layout.
-Hacienda Navigation still handles page-to-page GET morphing; Helium SSE is the
+Morpheus handles page-to-page GET morphing; Helium SSE is the
 lighter live-update path for individual moving parts on a page.
 
 The app-facing lifecycle events are:
 
-- `hacienda:before-navigate` (cancelable)
-- `hacienda:navigation-start`
-- `hacienda:before-morph` (cancelable)
-- `hacienda:load`
-- `hacienda:navigation-error`
-- `hacienda:navigation-end`
-- `hacienda:invalidate` (dispatch to clear the prefetch cache)
+- `morpheus:before-navigate` (cancelable)
+- `morpheus:navigation-start`
+- `morpheus:before-morph` (cancelable)
+- `morpheus:load`
+- `morpheus:navigation-error`
+- `morpheus:navigation-end`
+- `morpheus:invalidate` (dispatch to clear the prefetch cache)
 
-`hacienda:load` fires on the animation frame after the morph. MutationObserver
+`morpheus:load` fires on the animation frame after the morph. MutationObserver
 callbacks, including Helium's normal synchronous binding pass, have therefore
 run before application listeners receive it. Code loaded asynchronously by a
 Helium `@import` directive can finish later and should expose its own readiness
 signal when ordering matters.
 
-Use `data-hacienda-navigation="off"` on a link or ancestor for a native page
-load, `data-hacienda-prefetch="off"` to disable prefetching for a link, and
-`data-hacienda-permanent` to preserve an element across morphs. An action can
+Use `data-morpheus="off"` on a link or ancestor for a native page
+load, `data-morpheus-prefetch="off"` to disable prefetching for a link, and
+`data-morpheus-permanent` to preserve an element across morphs. An action can
 force a full reload with `context.navigation_reload!`. Non-2xx, non-HTML,
 cross-origin, incompatible, and explicitly opted-out responses fall back to
 normal browser navigation.
@@ -1258,7 +1253,7 @@ client and browser tests, and locked Ruby and npm dependency audits. PostgreSQL
 portability contracts are explicit because they require a running server:
 
 ```sh
-POSTGRES_DATABASE_URL=postgres://localhost/hacienda_test \
+POSTGRES_DATABASE_URL=postgres://localhost/lunula_test \
   bundle exec rake test:postgresql
 ```
 
@@ -1274,8 +1269,8 @@ config/environments/
 Use the current environment in app code:
 
 ```ruby
-Hacienda.env.production?
-Hacienda.logger.info "Published post"
+Lunula.env.production?
+Lunula.logger.info "Published post"
 ```
 
 Generated apps enable code reloading in development. Action classes and route
@@ -1285,7 +1280,7 @@ reload so a threaded server cannot reload constants while another request is
 using them.
 
 The default action methods live in `app/domains/posts/actions.rb` on
-`Posts::Actions < Hacienda::Actions`. Larger domains can add multi-method action
+`Posts::Actions < Lunula::Actions`. Larger domains can add multi-method action
 sets under `actions/`. For example,
 `app/domains/posts/actions/publishing_actions.rb` defines
 `Posts::PublishingActions`, and a route selects it explicitly:
@@ -1295,7 +1290,7 @@ post "/posts/:id/publish", :publish, actions: :publishing
 ```
 
 Action-set files are managed by Zeitwerk. On reload, Zeitwerk unloads the
-managed domain generation and Hacienda redraws the explicit route files. This
+managed domain generation and Lunula redraws the explicit route files. This
 keeps repositories, behavior modules, nested constants, actions, guards, and
 cross-domain references on the same generation.
 
@@ -1330,6 +1325,6 @@ See [`docs/getting-started.md`](docs/getting-started.md) and
 [`examples/store`](examples/store) for a Rails Guides-style walkthrough and its
 complete store application, including an explicit feature-gap comparison.
 
-See [`examples/site`](examples/site) for Hacienda’s own database-free website,
+See [`examples/site`](examples/site) for Lunula’s own database-free website,
 including the product homepage, ten-minute blog quick start, and web-rendered
 store guide.

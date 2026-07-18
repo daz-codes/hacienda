@@ -1,0 +1,629 @@
+# frozen_string_literal: true
+
+module Lunula
+  class Generator
+    module AuthenticationTemplates
+      private
+
+      def auth_routes
+        <<~RUBY
+          get "/login", :login
+          post "/login", :authenticate
+          get "/magic-login", :magic_login
+          post "/magic-login", :send_magic_link
+          get "/magic-login/confirm", :confirm_magic_link
+          post "/magic-login/confirm", :complete_magic_login
+          get "/signup", :signup
+          post "/signup", :create_account
+          get "/verify-email", :verify_email
+          post "/verify-email", :confirm_email
+          post "/email-verification", :send_verification_email
+
+          get "/password/forgot", :forgot_password
+          post "/password/forgot", :send_password_reset
+          get "/password/reset", :reset_password
+          patch "/password", :update_password
+
+          guard Auth::Required do
+            delete "/logout", :logout
+          end
+        RUBY
+      end
+
+      def password_authenticatable
+        <<~RUBY
+          # frozen_string_literal: true
+
+          require "bcrypt"
+
+          module Auth
+            module PasswordAuthenticatable
+              DUMMY_PASSWORD_DIGEST = "$2a$12$GEDdi5Vp3yrzDzr9JV4kM.kmreQ90Btoz.Py/9ZJdy/g5IumqMy0q"
+
+              def self.credentials_match?(user, value, password_class: BCrypt::Password)
+                digest = user&.password_digest.to_s
+                digest = DUMMY_PASSWORD_DIGEST unless password_class.valid_hash?(digest)
+                matches = password_class.new(digest) == value.to_s
+                !!user && matches
+              end
+
+              def password=(value)
+                self.password_digest = BCrypt::Password.create(value).to_s
+              end
+
+              def authenticate(value)
+                BCrypt::Password.new(password_digest) == value
+              rescue BCrypt::Errors::InvalidHash
+                false
+              end
+            end
+          end
+        RUBY
+      end
+
+      def auth_user
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module Auth
+            class User
+              include Lunula::Attributes
+              include Lunula::Validations
+              include PasswordAuthenticatable
+
+              attributes :id, :password_digest, :email_verified_at, :created_at, :updated_at
+              attribute :email, default: ""
+              attribute :password_reset_version, default: 0, cast: ->(value) { value.to_i }
+              attribute :magic_login_version, default: 0, cast: ->(value) { value.to_i }
+
+              def validate(password: nil)
+                errors.add :email, "is required" if email.to_s.strip.empty?
+                errors.add :password, "must be at least 12 characters" if password && password.length < 12
+              end
+
+              def email_verified?
+                !!email_verified_at
+              end
+
+              def verify_email(at: Time.now)
+                self.email_verified_at = at
+                self
+              end
+
+              def rotate_password_reset_version
+                self.password_reset_version = password_reset_version.to_i + 1
+                self
+              end
+
+              def rotate_magic_login_version
+                self.magic_login_version = magic_login_version.to_i + 1
+                self
+              end
+            end
+          end
+        RUBY
+      end
+
+      def auth_repository
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module Auth
+            module Repository
+              extend Lunula::Repository
+
+              store database: APP.database, table: :users, record: User
+
+              def find_by_email(email)
+                find_by(email: normalize(email))
+              end
+
+              def save(user)
+                user.email = normalize(user.email)
+                super
+              end
+
+              private
+
+              def normalize(email)
+                email.to_s.strip.downcase
+              end
+            end
+          end
+        RUBY
+      end
+
+      def auth_mailer
+        <<~RUBY
+          # frozen_string_literal: true
+
+          require "rack/utils"
+
+          module Auth
+            module Mailer
+              module_function
+
+              def verification_email(_context, user)
+                token = Lunula.signed_token.generate(
+                  {user_id: user.id, email: user.email},
+                  purpose: "email_verification",
+                  expires_in: 24 * 60 * 60
+                )
+                url = Lunula.app_url("/verify-email?token=\#{Rack::Utils.escape(token)}")
+
+                Lunula.mail(
+                  to: user.email,
+                  subject: "Verify your email",
+                  text: "Verify your email by visiting: \#{url}"
+                )
+              end
+
+              def password_reset_email(_context, user)
+                token = Lunula.signed_token.generate(
+                  {user_id: user.id, password_reset_version: user.password_reset_version},
+                  purpose: "password_reset",
+                  expires_in: 15 * 60
+                )
+                url = Lunula.app_url("/password/reset?token=\#{Rack::Utils.escape(token)}")
+
+                Lunula.mail(
+                  to: user.email,
+                  subject: "Reset your password",
+                  text: "Reset your password by visiting: \#{url}"
+                )
+              end
+
+              def magic_login_email(_context, user)
+                token = Lunula.signed_token.generate(
+                  {user_id: user.id, magic_login_version: user.magic_login_version},
+                  purpose: "magic_login",
+                  expires_in: 15 * 60
+                )
+                url = Lunula.app_url("/magic-login/confirm?token=\#{Rack::Utils.escape(token)}")
+
+                Lunula.mail(
+                  to: user.email,
+                  subject: "Log in to your account",
+                  text: "Log in by visiting: \#{url}"
+                )
+              end
+            end
+          end
+        RUBY
+      end
+
+      def auth_session
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module Auth
+            module Session
+              module_function
+
+              def login(context, user)
+                context.reset_session!
+                context.session[:user_id] = user.id
+                context.current_user = user
+              end
+
+              def logout(context)
+                context.reset_session!
+                context.current_user = nil
+              end
+
+            end
+          end
+        RUBY
+      end
+
+      def auth_context_loader
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module Auth
+            module LoadCurrentUser
+              module_function
+
+              def load(context)
+                user_id = context.session[:user_id]
+                context.current_user = Repository.find_by(id: user_id) if user_id
+              end
+            end
+          end
+        RUBY
+      end
+
+      def auth_guard
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module Auth
+            module Required
+              module_function
+
+              def check(context, _params)
+                redirect("/login") unless context.current_user
+              end
+            end
+          end
+        RUBY
+      end
+
+      def auth_token_verifier
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module Auth
+            module TokenVerifier
+              module_function
+
+              def magic_login(token)
+                verified_user(token, purpose: "magic_login") do |user, payload|
+                  user.email_verified? && user.magic_login_version.to_i == payload["magic_login_version"].to_i
+                end
+              end
+
+              def email_verification(token)
+                verified_user(token, purpose: "email_verification") do |user, payload|
+                  !user.email_verified? && user.email == payload["email"]
+                end
+              end
+
+              def password_reset(token)
+                verified_user(token, purpose: "password_reset") do |user, payload|
+                  user.password_reset_version.to_i == payload["password_reset_version"].to_i
+                end
+              end
+
+              def verified_user(token, purpose:)
+                payload = Lunula.signed_token.verify(token, purpose:)
+                user = payload && Repository.find_by(id: payload["user_id"])
+                user if user && yield(user, payload)
+              end
+              private_class_method :verified_user
+            end
+          end
+        RUBY
+      end
+
+      def auth_action_set
+        <<~RUBY
+          # frozen_string_literal: true
+
+          module Auth
+            class Actions < Lunula::Actions
+              def login(_context, _params)
+                {email: "", error: nil}
+              end
+
+              def authenticate(context, params)
+                credentials = params.permit(:email, :password)
+                user = Repository.find_by_email(credentials[:email])
+
+                if PasswordAuthenticatable.credentials_match?(user, credentials[:password]) && user.email_verified?
+                  Session.login(context, user)
+                  context.flash[:notice] = "Logged in."
+                  redirect "/"
+                else
+                  render :login,
+                    email: credentials[:email].to_s,
+                    error: "Invalid email or password",
+                    status: 422
+                end
+              end
+
+              def magic_login(_context, _params)
+                {email: ""}
+              end
+
+              def send_magic_link(context, params)
+                attributes = params.permit(:email)
+                user = Repository.find_by_email(attributes[:email])
+
+                if user&.email_verified?
+                  user.rotate_magic_login_version
+                  Repository.save(user)
+                  Mailer.magic_login_email(context, user).deliver_later
+                end
+
+                context.flash[:notice] = "If that email can sign in, we sent a login link."
+                redirect "/login"
+              end
+
+              def confirm_magic_link(_context, params)
+                attributes = params.permit(:token)
+                unless TokenVerifier.magic_login(attributes[:token])
+                  return render(:magic_login_confirm, token: "", errors: ["Login link is invalid or expired."], status: 422)
+                end
+
+                render :magic_login_confirm, token: attributes[:token].to_s, errors: []
+              end
+
+              def complete_magic_login(context, params)
+                attributes = params.permit(:token)
+                user = TokenVerifier.magic_login(attributes[:token])
+                unless user
+                  return render(:magic_login_confirm, token: "", errors: ["Login link is invalid or expired."], status: 422)
+                end
+
+                user.rotate_magic_login_version
+                Repository.save(user)
+                Session.login(context, user)
+                context.flash[:notice] = "Logged in."
+                redirect "/"
+              end
+
+              def signup(_context, _params)
+                {email: "", errors: []}
+              end
+
+              def create_account(context, params)
+                attributes = params.permit(:email, :password)
+                password = attributes[:password].to_s
+                user = User.new(email: attributes[:email].to_s)
+                user.valid?(password:)
+                user.password = password if user.errors.empty?
+                return render(:signup, email: user.email, errors: user.errors, status: 422) if user.errors.any?
+
+                existing = Repository.find_by_email(user.email)
+                if existing
+                  Mailer.verification_email(context, existing).deliver_later unless existing.email_verified?
+                else
+                  Repository.save(user)
+                  Mailer.verification_email(context, user).deliver_later
+                end
+                context.flash[:notice] = "If that email can be registered, we sent account instructions."
+                redirect "/login"
+              end
+
+              def verify_email(_context, params)
+                attributes = params.permit(:token)
+                unless TokenVerifier.email_verification(attributes[:token])
+                  return render(:verify_email, token: "", errors: ["Verification link is invalid or expired."], status: 422)
+                end
+
+                {token: attributes[:token].to_s, errors: []}
+              end
+
+              def confirm_email(context, params)
+                attributes = params.permit(:token)
+                user = TokenVerifier.email_verification(attributes[:token])
+                unless user
+                  return render(:verify_email, token: "", errors: ["Verification link is invalid or expired."], status: 422)
+                end
+
+                user.verify_email
+                Repository.save(user)
+                Session.login(context, user)
+                context.flash[:notice] = "Email verified."
+                redirect "/"
+              end
+
+              def send_verification_email(context, params)
+                attributes = params.permit(:email)
+                user = Repository.find_by_email(attributes[:email])
+                Mailer.verification_email(context, user).deliver_later if user && !user.email_verified?
+                context.flash[:notice] = "If that email needs verification, we sent a link."
+                redirect "/login"
+              end
+
+              def forgot_password(_context, _params)
+                {email: ""}
+              end
+
+              def send_password_reset(context, params)
+                attributes = params.permit(:email)
+                user = Repository.find_by_email(attributes[:email])
+                Mailer.password_reset_email(context, user).deliver_later if user
+                context.flash[:notice] = "If that email exists, we sent a password reset link."
+                redirect "/login"
+              end
+
+              def reset_password(_context, params)
+                attributes = params.permit(:token)
+                unless TokenVerifier.password_reset(attributes[:token])
+                  return render(:reset_password, token: "", errors: ["Password reset link is invalid or expired."], status: 422)
+                end
+
+                {token: attributes[:token].to_s, errors: []}
+              end
+
+              def update_password(context, params)
+                attributes = params.permit(:token, :password)
+                user = TokenVerifier.password_reset(attributes[:token])
+                unless user
+                  return render(:reset_password, token: "", errors: ["Password reset link is invalid or expired."], status: 422)
+                end
+
+                password = attributes[:password].to_s
+                return render(:reset_password, token: attributes[:token].to_s, errors: user.errors, status: 422) if user.invalid?(password:)
+
+                user.password = password
+                user.rotate_password_reset_version
+                Repository.save(user)
+                Session.login(context, user)
+                context.flash[:notice] = "Password updated."
+                redirect "/"
+              end
+
+              def logout(context, _params)
+                Session.logout(context)
+                context.flash[:notice] = "Logged out."
+                redirect "/"
+              end
+            end
+          end
+        RUBY
+      end
+
+      def auth_views
+        {
+          "login" => <<~ERB,
+            <% page_title "Log in" %>
+
+            <h1>Log in</h1>
+            <%= error_messages [error].compact %>
+            <%= form_start "/login", context: %>
+              <label>Email <input type="email" name="email" value="<%= email %>" required></label>
+              <label>Password <input type="password" name="password" required></label>
+              <button type="submit">Log in</button>
+            <%= form_end %>
+            <p><%= link "Email me a login link", "/magic-login" %></p>
+            <p><%= link "Forgot your password?", "/password/forgot" %></p>
+          ERB
+          "magic_login" => <<~ERB,
+            <% page_title "Email login link" %>
+
+            <h1>Email login link</h1>
+            <%= form_start "/magic-login", context: %>
+              <label>Email <input type="email" name="email" value="<%= email %>" required></label>
+              <button type="submit">Send login link</button>
+            <%= form_end %>
+          ERB
+          "magic_login_confirm" => <<~ERB,
+            <% page_title "Log in with email" %>
+
+            <h1>Log in with email</h1>
+            <%= error_messages errors %>
+            <% unless token.to_s.empty? %>
+              <%= form_start "/magic-login/confirm", context: %>
+                <input type="hidden" name="token" value="<%= token %>">
+                <button type="submit">Log in</button>
+              <%= form_end %>
+            <% end %>
+          ERB
+          "signup" => <<~ERB,
+            <% page_title "Sign up" %>
+
+            <h1>Sign up</h1>
+            <%= error_messages errors %>
+            <%= form_start "/signup", context: %>
+              <label>Email <input type="email" name="email" value="<%= email %>" required></label>
+              <label>Password <input type="password" name="password" minlength="12" required></label>
+              <button type="submit">Sign up</button>
+            <%= form_end %>
+          ERB
+          "verify_email" => <<~ERB,
+            <% page_title "Verify your email" %>
+
+            <h1>Verify your email</h1>
+            <%= error_messages errors %>
+            <% unless token.to_s.empty? %>
+              <%= form_start "/verify-email", context: %>
+                <input type="hidden" name="token" value="<%= token %>">
+                <button type="submit">Verify email</button>
+              <%= form_end %>
+            <% end %>
+          ERB
+          "forgot_password" => <<~ERB,
+            <% page_title "Reset your password" %>
+
+            <h1>Reset your password</h1>
+            <%= form_start "/password/forgot", context: %>
+              <label>Email <input type="email" name="email" value="<%= email %>" required></label>
+              <button type="submit">Send reset link</button>
+            <%= form_end %>
+          ERB
+          "reset_password" => <<~ERB
+            <% page_title "Choose a new password" %>
+
+            <h1>Choose a new password</h1>
+            <%= error_messages errors %>
+            <% unless token.to_s.empty? %>
+              <%= form_start "/password", method: "patch", context: %>
+                <input type="hidden" name="token" value="<%= token %>">
+                <label>New password <input type="password" name="password" minlength="12" required></label>
+                <button type="submit">Update password</button>
+              <%= form_end %>
+            <% end %>
+          ERB
+        }
+      end
+
+      def users_migration
+        <<~RUBY
+          Sequel.migration do
+            change do
+              create_table(:users) do
+                primary_key :id
+                String :email, null: false, unique: true
+                String :password_digest, null: false
+                DateTime :email_verified_at
+                Integer :password_reset_version, null: false, default: 0
+                Integer :magic_login_version, null: false, default: 0
+                DateTime :created_at, null: false
+                DateTime :updated_at, null: false
+              end
+            end
+          end
+        RUBY
+      end
+
+      def write_auth_tests
+        FileUtils.mkdir_p(domain_test_root("auth"))
+        FileUtils.rm_f(File.join(domain_test_root("auth"), ".keep"))
+        write_new(File.join(domain_test_root("auth"), "user_test.rb"), auth_user_test)
+        write_new(File.join(domain_test_root("auth"), "actions_test.rb"), auth_actions_test)
+      end
+
+      def auth_user_test
+        <<~RUBY
+          # frozen_string_literal: true
+
+          require_relative "../../test_helper"
+
+          class AuthUserTest < Minitest::Test
+            def test_email_and_password_policy
+              user = Auth::User.new
+
+              refute user.valid?(password: "short")
+              assert_includes user.errors.full_messages, "Email is required"
+              assert_includes user.errors.full_messages, "Password must be at least 12 characters"
+            end
+
+            def test_one_time_token_versions_rotate
+              user = Auth::User.new(email: "person@example.com")
+
+              user.rotate_magic_login_version
+              user.rotate_password_reset_version
+
+              assert_equal 1, user.magic_login_version
+              assert_equal 1, user.password_reset_version
+            end
+          end
+        RUBY
+      end
+
+      def auth_actions_test
+        <<~RUBY
+          # frozen_string_literal: true
+
+          require_relative "../../test_helper"
+
+          class AuthActionsTest < ApplicationTest
+            def setup
+              super
+              database[:users].delete
+              Lunula.clear_mail_deliveries
+            end
+
+            def test_signup_persists_an_unverified_user_and_sends_instructions
+              post "/signup", {
+                _csrf: csrf_token,
+                email: " Person@Example.com ",
+                password: "a-long-password"
+              }
+
+              assert_equal 303, last_response.status
+              assert_equal "/login", last_response["location"]
+              user = database[:users].first
+              assert_equal "person@example.com", user[:email]
+              assert_nil user[:email_verified_at]
+              assert_equal 1, Lunula.mail_deliveries.length
+            end
+          end
+        RUBY
+      end
+    end
+  end
+end

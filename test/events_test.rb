@@ -9,7 +9,7 @@ class EventsTest < Minitest::Test
   Archived = Data.define(:post_id)
 
   def test_publishes_typed_events_to_each_subscriber_in_declaration_order
-    events = Hacienda::Events.new
+    events = Lunula::Events.new
     calls = []
     events.subscribe(Published, ->(event) { calls << [:first, event.post_id] })
     events.subscribe(Published, ->(event) { calls << [:second, event.post_id] })
@@ -23,8 +23,8 @@ class EventsTest < Minitest::Test
   end
 
   def test_unsubscribe_removes_a_runtime_subscription
-    events = Hacienda::Events.new
-    recorder = Hacienda::Events::Recorder.new
+    events = Lunula::Events.new
+    recorder = Lunula::Events::Recorder.new
     subscription = events.subscribe(Published, recorder)
 
     events.publish(Published.new(post_id: 1))
@@ -35,8 +35,8 @@ class EventsTest < Minitest::Test
   end
 
   def test_configuration_can_be_reloaded_without_duplicate_subscribers
-    events = Hacienda::Events.new
-    recorder = Hacienda::Events::Recorder.new
+    events = Lunula::Events.new
+    recorder = Lunula::Events::Recorder.new
     events.configure do |registry|
       registry.subscribe(Published, recorder)
     end
@@ -53,11 +53,11 @@ class EventsTest < Minitest::Test
     output = StringIO.new
     logger = Logger.new(output)
     reported = []
-    events = Hacienda::Events.new(
+    events = Lunula::Events.new(
       logger:,
       on_error: ->(event, subscriber, error) { reported << [event, subscriber, error] }
     )
-    recorder = Hacienda::Events::Recorder.new
+    recorder = Lunula::Events::Recorder.new
     failure = ->(_event) { raise "subscriber exploded" }
     events.subscribe(Published, failure)
     events.subscribe(Published, recorder)
@@ -74,7 +74,7 @@ class EventsTest < Minitest::Test
   end
 
   def test_subscriptions_are_safe_to_register_concurrently
-    events = Hacienda::Events.new
+    events = Lunula::Events.new
     queue = Queue.new
     threads = 20.times.map do
       Thread.new { events.subscribe(Published, ->(_event) { queue << true }) }
@@ -88,7 +88,7 @@ class EventsTest < Minitest::Test
   end
 
   def test_recorder_returns_a_copy_and_can_be_cleared
-    recorder = Hacienda::Events::Recorder.new
+    recorder = Lunula::Events::Recorder.new
     event = Published.new(post_id: 1)
     recorder.call(event)
 
@@ -104,17 +104,17 @@ class TransactionEventsTest < Minitest::Test
   Changed = Data.define(:value)
 
   def setup
-    @root = Dir.mktmpdir("hacienda-events")
+    @root = Dir.mktmpdir("lunula-events")
     FileUtils.mkdir_p(File.join(@root, "app", "domains"))
     @database = Sequel.sqlite
     @database.create_table(:records) do
       primary_key :id
       String :value
     end
-    @events = Hacienda::Events.new
-    @recorder = Hacienda::Events::Recorder.new
+    @events = Lunula::Events.new
+    @recorder = Lunula::Events::Recorder.new
     @events.subscribe(Changed, @recorder)
-    @app = Hacienda::Application.new(root: @root, database: @database, events: @events)
+    @app = Lunula::Application.new(root: @root, database: @database, events: @events)
   end
 
   def teardown
@@ -172,7 +172,7 @@ class TransactionEventsTest < Minitest::Test
   end
 
   def test_context_delegates_to_the_application_transaction
-    context = Hacienda::Context.new(Rack::MockRequest.env_for("/"), application: @app)
+    context = Lunula::Context.new(Rack::MockRequest.env_for("/"), application: @app)
 
     context.transaction do |transaction|
       transaction.emit Changed.new(value: "from context")
@@ -182,11 +182,11 @@ class TransactionEventsTest < Minitest::Test
   end
 
   def test_application_requires_an_explicit_database
-    other_root = Dir.mktmpdir("hacienda-events-no-database")
+    other_root = Dir.mktmpdir("lunula-events-no-database")
     FileUtils.mkdir_p(File.join(other_root, "app", "domains"))
-    app = Hacienda::Application.new(root: other_root)
+    app = Lunula::Application.new(root: other_root)
 
-    error = assert_raises(Hacienda::Error) { app.transaction { nil } }
+    error = assert_raises(Lunula::Error) { app.transaction { nil } }
 
     assert_includes error.message, "database is not configured"
   ensure
@@ -198,7 +198,7 @@ end
 
 class EventReloadingTest < Minitest::Test
   def setup
-    @root = Dir.mktmpdir("hacienda-event-reload")
+    @root = Dir.mktmpdir("lunula-event-reload")
     write "app/domains/posts/events.rb", <<~RUBY
       module Posts
         module Events
@@ -206,8 +206,8 @@ class EventReloadingTest < Minitest::Test
         end
       end
     RUBY
-    @app = Hacienda::Application.new(root: @root, reload: true)
-    @recorder = Hacienda::Events::Recorder.new
+    @app = Lunula::Application.new(root: @root, reload: true)
+    @recorder = Lunula::Events::Recorder.new
     @app.events.configure do |events|
       events.subscribe Posts::Events::Published, @recorder
     end
@@ -246,17 +246,17 @@ class DurableEventOutboxTest < Minitest::Test
   Changed = Data.define(:record_id, :occurred_at)
 
   def setup
-    @root = Dir.mktmpdir("hacienda-outbox")
+    @root = Dir.mktmpdir("lunula-outbox")
     FileUtils.mkdir_p(File.join(@root, "app", "domains"))
     @now = Time.utc(2026, 6, 29, 12)
     @database = Sequel.sqlite
     @database.create_table(:records) { primary_key :id; String :value }
     create_outbox_table
-    @events = Hacienda::Events.new
-    @recorder = Hacienda::Events::Recorder.new
+    @events = Lunula::Events.new
+    @recorder = Lunula::Events::Recorder.new
     @events.subscribe(Changed, @recorder)
     @outbox = outbox
-    @app = Hacienda::Application.new(
+    @app = Lunula::Application.new(
       root: @root,
       database: @database,
       events: @events,
@@ -278,13 +278,13 @@ class DurableEventOutboxTest < Minitest::Test
     end
 
     assert_empty @recorder.events
-    assert_equal 1, @database[:hacienda_outbox].count
+    assert_equal 1, @database[:lunula_outbox].count
 
     execution = outbox.dispatch_once(events: @events)
 
     assert_equal :succeeded, execution.status
     assert_equal [Changed.new(record_id: 1, occurred_at: @now)], @recorder.events
-    assert_empty @database[:hacienda_outbox]
+    assert_empty @database[:lunula_outbox]
   end
 
   def test_rollback_removes_business_write_and_outbox_record
@@ -295,7 +295,7 @@ class DurableEventOutboxTest < Minitest::Test
     end
 
     assert_empty @database[:records]
-    assert_empty @database[:hacienda_outbox]
+    assert_empty @database[:lunula_outbox]
   end
 
   def test_subscriber_failure_keeps_event_for_retry
@@ -307,7 +307,7 @@ class DurableEventOutboxTest < Minitest::Test
     execution = @outbox.dispatch_once(events: @events)
 
     assert_equal :retrying, execution.status
-    row = @database[:hacienda_outbox].first
+    row = @database[:lunula_outbox].first
     assert_equal 1, row[:attempts]
     assert_nil row[:failed_at]
     assert_includes row[:last_error], "subscriber"
@@ -315,10 +315,10 @@ class DurableEventOutboxTest < Minitest::Test
 
   def test_application_rejects_an_outbox_on_a_different_database
     other_database = Sequel.sqlite
-    other_outbox = Hacienda::Events::Outbox.new(database: other_database)
+    other_outbox = Lunula::Events::Outbox.new(database: other_database)
 
     error = assert_raises(ArgumentError) do
-      Hacienda::Application.new(root: @root, database: @database, outbox: other_outbox)
+      Lunula::Application.new(root: @root, database: @database, outbox: other_outbox)
     end
 
     assert_includes error.message, "application's database"
@@ -327,7 +327,7 @@ class DurableEventOutboxTest < Minitest::Test
   end
 
   def test_lease_loss_is_an_uncertain_outbox_outcome_not_a_delivery_failure
-    @events.subscribe(Changed, ->(_event) { @database[:hacienda_outbox].update(locked_by: "another-worker") })
+    @events.subscribe(Changed, ->(_event) { @database[:lunula_outbox].update(locked_by: "another-worker") })
     @app.transaction do |transaction|
       transaction.emit Changed.new(record_id: 1, occurred_at: @now)
     end
@@ -335,14 +335,14 @@ class DurableEventOutboxTest < Minitest::Test
     execution = @outbox.dispatch_once(events: @events)
 
     assert_equal :lease_lost, execution.status
-    assert_instance_of Hacienda::Durable::LeaseLost, execution.error
-    assert_nil @database[:hacienda_outbox].get(:failed_at)
+    assert_instance_of Lunula::Durable::LeaseLost, execution.error
+    assert_nil @database[:lunula_outbox].get(:failed_at)
   end
 
   private
 
   def outbox
-    Hacienda::Events::Outbox.new(
+    Lunula::Events::Outbox.new(
       database: @database,
       lease_seconds: 60,
       retry_delay: ->(_attempt) { 1 },
@@ -351,7 +351,7 @@ class DurableEventOutboxTest < Minitest::Test
   end
 
   def create_outbox_table
-    @database.create_table(:hacienda_outbox) do
+    @database.create_table(:lunula_outbox) do
       primary_key :id
       String :event_class, null: false
       String :payload, text: true, null: false

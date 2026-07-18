@@ -8,10 +8,10 @@ class ProductsTest < ApplicationTest
     database[:subscribers].delete
     database[:products].delete
     database[:users].delete
-    database[:hacienda_outbox].delete
-    database[:hacienda_jobs].delete
+    database[:lunula_outbox].delete
+    database[:lunula_jobs].delete
     APP.cache.clear
-    Hacienda.clear_mail_deliveries
+    Lunula.clear_mail_deliveries
   end
 
   def test_products_are_public_but_management_requires_login
@@ -49,7 +49,7 @@ class ProductsTest < ApplicationTest
     end
 
     assert_equal 303, last_response.status
-    product = Products::Repository.dataset.where(name: "Canvas Tote").then { |scope| Products::Repository::STORE.first(scope) }
+    product = Products::Repository.first(Products::Repository.dataset.where(name: "Canvas Tote"))
     assert product.featured_image?
     assert APP.storage.exist?(product.featured_image_key)
   end
@@ -67,9 +67,9 @@ class ProductsTest < ApplicationTest
     }
 
     assert_equal 303, last_response.status
-    assert_equal 1, Hacienda.mail_deliveries.length
-    assert_equal ["listener@example.com"], Hacienda.mail_deliveries.first.to
-    assert_includes Hacienda.mail_deliveries.first.subject, "back in stock"
+    assert_equal 1, Lunula.mail_deliveries.length
+    assert_equal ["listener@example.com"], Lunula.mail_deliveries.first.to
+    assert_includes Lunula.mail_deliveries.first.subject, "back in stock"
   end
 
   def test_unsubscribe_requires_confirmation_post
@@ -84,7 +84,7 @@ class ProductsTest < ApplicationTest
 
     post "/unsubscribe", token: token, _csrf: fresh_csrf("/unsubscribe?token=#{Rack::Utils.escape(token)}")
     assert_equal 303, last_response.status
-    assert_nil Products::Subscribers.find(subscriber.id)
+    assert_nil Products::Subscribers.find_by(id: subscriber.id)
   end
 
   private

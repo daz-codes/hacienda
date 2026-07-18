@@ -2,8 +2,8 @@
 
 module Workouts
   class Workout
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
     include Programmable
     include Scalable
 

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Posts
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def index(_context, _params)
       {posts: Repository.published}
     end
@@ -9,7 +9,7 @@ module Posts
     def show(context, params)
       post = Repository.find_with_comments(params[:id])
       can_manage = Policy.manage?(context.current_user, post)
-      raise Hacienda::NotFound unless (post.published? && !post.archived?) || can_manage
+      raise Lunula::NotFound unless (post.published? && !post.archived?) || can_manage
 
       return response("", status: 304) if fresh_public_post?(context, post)
 

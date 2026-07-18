@@ -8,14 +8,14 @@ before using it.
 
 Install dependencies and commit `Gemfile.lock`; the Docker build is
 intentionally locked and will fail without it. It also runs
-`hac assets:precompile` so production asset helpers resolve fingerprinted files:
+`luna assets:precompile` so production asset helpers resolve fingerprinted files:
 
 ```sh
 bundle install
 git add Gemfile.lock
 ```
 
-If Hacienda is referenced through a local `path:` in `Gemfile`, replace
+If Lunula is referenced through a local `path:` in `Gemfile`, replace
 it with a released gem version before building outside the framework
 checkout.
 
@@ -25,22 +25,22 @@ checkout.
 docker build -t store .
 docker volume create store_db
 docker volume create store_storage
-export HACIENDA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
+export LUNULA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
 docker run --rm \
-  -e HACIENDA_MASTER_KEY="$(cat config/master.key)" \
-  -e HACIENDA_SESSION_SECRET \
+  -e LUNULA_MASTER_KEY="$(cat config/master.key)" \
+  -e LUNULA_SESSION_SECRET \
   -e DATABASE_URL=sqlite:///app/db/production.sqlite3 \
-  -e HACIENDA_STORAGE_SERVICE=disk \
-  -e HACIENDA_STORAGE_ROOT=/app/storage \
+  -e LUNULA_STORAGE_SERVICE=disk \
+  -e LUNULA_STORAGE_ROOT=/app/storage \
   -v store_db:/app/db \
   -v store_storage:/app/storage \
-  store bundle exec hac db:migrate
+  store bundle exec luna db:migrate
 docker run --rm -p 5151:5151 \
-  -e HACIENDA_MASTER_KEY="$(cat config/master.key)" \
-  -e HACIENDA_SESSION_SECRET \
+  -e LUNULA_MASTER_KEY="$(cat config/master.key)" \
+  -e LUNULA_SESSION_SECRET \
   -e DATABASE_URL=sqlite:///app/db/production.sqlite3 \
-  -e HACIENDA_STORAGE_SERVICE=disk \
-  -e HACIENDA_STORAGE_ROOT=/app/storage \
+  -e LUNULA_STORAGE_SERVICE=disk \
+  -e LUNULA_STORAGE_ROOT=/app/storage \
   -v store_db:/app/db \
   -v store_storage:/app/storage \
   store
@@ -65,22 +65,22 @@ a domain whose DNS points to the server.
 
    ```sh
    export KAMAL_REGISTRY_PASSWORD="registry-access-token"
-   export HACIENDA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
+   export LUNULA_SESSION_SECRET=$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')
    # During rotation only:
-   # export HACIENDA_SESSION_SECRET_OLD="previous-secret"
+   # export LUNULA_SESSION_SECRET_OLD="previous-secret"
    ```
 
 Sessions use encrypted client-side cookies by default. They expire after 30
-days; set `HACIENDA_SESSION_EXPIRE_AFTER` to a positive number of seconds to
-change that. To rotate `HACIENDA_SESSION_SECRET`, deploy the new value and keep
-the previous value in `HACIENDA_SESSION_SECRET_OLD` until old cookies have
+days; set `LUNULA_SESSION_EXPIRE_AFTER` to a positive number of seconds to
+change that. To rotate `LUNULA_SESSION_SECRET`, deploy the new value and keep
+the previous value in `LUNULA_SESSION_SECRET_OLD` until old cookies have
 expired. Logout removes the browser's current cookie, but a stolen copy remains
 replayable until expiry or secret rotation because the default store has no
 server-side revocation list.
 
-Set `HACIENDA_SESSION_STORE=database` to store session payloads in Sequel
+Set `LUNULA_SESSION_STORE=database` to store session payloads in Sequel
 instead. That keeps only an opaque id in the browser, uses the generated
-`hacienda_sessions` table, and allows server-side revocation by deleting rows.
+`lunula_sessions` table, and allows server-side revocation by deleting rows.
 Run migrations before enabling it.
 
 3. Run the first deployment and migrate the database:
@@ -104,8 +104,8 @@ This is deliberately a single-server configuration. Keep the database
 on a local filesystem; WAL mode is not suitable for a network filesystem.
 Generated apps configure WAL mode, foreign-key enforcement,
 `synchronous = NORMAL`, and a 5 second busy-timeout outside test. Run
-`bundle exec hac db:check` after deployment to verify these settings.
-Run `bundle exec hac db:checkpoint --mode TRUNCATE` during maintenance
+`bundle exec luna db:check` after deployment to verify these settings.
+Run `bundle exec luna db:checkpoint --mode TRUNCATE` during maintenance
 if the WAL file grows unexpectedly after a burst of writes.
 Move to a client/server database only when measured write contention or
 availability requirements justify a multi-host design.
@@ -123,15 +123,15 @@ supervisor.
 
 ## Jobs and event delivery
 
-Production uses Hacienda's durable database job adapter and the
+Production uses Lunula's durable database job adapter and the
 transactional event outbox. The generated `job` server role runs
-`hac jobs:work` on the same host and volume. Delivery is at least once,
+`luna jobs:work` on the same host and volume. Delivery is at least once,
 so jobs and event subscribers must be idempotent.
 
-Qualify the queue on the deployed host after `hac db:check`:
+Qualify the queue on the deployed host after `luna db:check`:
 
 ```sh
-bundle exec hac jobs:benchmark --jobs 1000 --retry-jobs 25 --threads 2 --batch-size 10
+bundle exec luna jobs:benchmark --jobs 1000 --retry-jobs 25 --threads 2 --batch-size 10
 ```
 
 The benchmark uses the real database job adapter, worker claim/complete
@@ -142,7 +142,7 @@ single-host SQLite shape, start with one worker process, `--threads 2`,
 if web requests or benchmark p95 database latency degrade under load.
 
 Inspect terminal failures with
-`kamal app exec --role job "bundle exec hac jobs:failed"`.
+`kamal app exec --role job "bundle exec luna jobs:failed"`.
 Configure SMTP secrets in `.kamal/secrets` and `config/deploy.yml` if
 the application sends mail.
 

@@ -1,6 +1,6 @@
-# Hacienda TODO
+# Lunula TODO
 
-This is the short-term roadmap for turning Hacienda from a working experiment
+This is the short-term roadmap for turning Lunula from a working experiment
 into a small, usable Ruby web framework.
 
 Roadmap labels apply primarily to unfinished work:
@@ -18,7 +18,7 @@ unless they are explicitly described as experimental.
 - [x] Domain-oriented app structure
 - [x] Rack application runtime
 - [x] Domain route files
-- [x] Method actions on fresh `Hacienda::Actions` instances
+- [x] Method actions on fresh `Lunula::Actions` instances
   - [x] Direct-method dispatch that excludes inherited `Object` methods
   - [x] Reserved helper-name validation at boot
   - [x] Additional multi-method action sets under each domain's `actions/` folder
@@ -31,16 +31,16 @@ unless they are explicitly described as experimental.
   - [x] Explicit load/dump coercions for JSON and other stored values
   - [x] Opt-in optimistic locking with loud stale-write failures
   - [x] Application-owned database used consistently by repositories
-- [x] `hac`/`fac new`
-- [x] `hac`/`fac generate domain`
-- [x] `hac`/`fac generate rest`
-- [x] `hac`/`fac generate action`
-- [x] `hac`/`fac generate auth`
-- [x] `hac`/`fac generate migration`
-- [x] `hac`/`fac start` on port 5151
-- [x] `hac`/`fac console`
-- [x] `hac`/`fac routes`
-- [x] `hac`/`fac db:migrate`, `db:rollback`, and `db:seed`
+- [x] `luna new`
+- [x] `luna generate domain`
+- [x] `luna generate rest`
+- [x] `luna generate action`
+- [x] `luna generate auth`
+- [x] `luna generate migration`
+- [x] `luna start` on port 5151
+- [x] `luna console`
+- [x] `luna routes`
+- [x] `luna db:migrate`, `db:rollback`, and `db:seed`
 - [x] Generated Rack::Test integration helper and smoke test
 - [x] Local Helium asset included by default
 - [x] Asset helpers for stylesheets and JavaScript
@@ -50,17 +50,17 @@ unless they are explicitly described as experimental.
 ## 1.0 release readiness
 
 - [x] **[1.0] Reproducible gem packaging and application generation**
-  - [x] Bundle every runtime asset required by `hac new` in the gem, or declare and verify a reliable install-time dependency
+  - [x] Bundle every runtime asset required by `luna new` in the gem, or declare and verify a reliable install-time dependency
   - [x] Build and install the packed gem in an isolated environment without a sibling checkout or repository `node_modules`
-  - [x] Run `hac new`, migrate, boot, and execute the generated test suite from that installed gem
-  - [x] Verify both `hac` and `fac` executables from the packed gem
+  - [x] Run `luna new`, migrate, boot, and execute the generated test suite from that installed gem
+  - [x] Verify the `luna` executable from the packed gem
   - [x] Make generator failures leave no partial application behind and report an actionable error
 - [ ] **[1.0] Green, isolated, repeatable verification**
   - [x] Provide one aggregate command for the Ruby, JavaScript, browser, example-application, and dependency-audit suites
   - [x] Give generated and example tests a fresh temporary database so retained test files cannot preserve an obsolete schema
   - [x] Add CI for the minimum supported Ruby and the current stable Ruby on Linux
   - [x] Run SQLite integration tests, generator package smoke tests, client tests, and dependency audits in CI
-  - [x] Add a PostgreSQL CI job for the migrations, persistence, transaction, and durable-queue contracts Hacienda claims are database-portable
+  - [x] Add a PostgreSQL CI job for the migrations, persistence, transaction, and durable-queue contracts Lunula claims are database-portable
   - [x] Prevent lockfile, generated-file, database, log, and asset churn during ordinary test runs
   - [ ] Confirm the complete GitHub Actions workflow passes from a clean checkout
 - [ ] **[1.0] Public API and release discipline**
@@ -75,27 +75,27 @@ unless they are explicitly described as experimental.
   - [x] Keep development assets readable and preserve the no-Node production runtime
   - [x] Verify asset references in generated layouts, Docker images, and navigation imports
 - [x] **[1.0] Migration-aware application startup**
-  - [x] Detect unapplied timestamped and integer migrations before `hac start` executes Rackup
-  - [x] Print the pending migration names and the exact `bundle exec hac db:migrate` recovery command in development
+  - [x] Detect unapplied timestamped and integer migrations before `luna start` executes Rackup
+  - [x] Print the pending migration names and the exact `bundle exec luna db:migrate` recovery command in development
   - [x] Refuse to start against a stale schema rather than allowing an unrelated missing-table or missing-column failure
-  - [x] Give direct `rackup` development requests an actionable pending-migration page without blocking `hac db:migrate` itself
+  - [x] Give direct `rackup` development requests an actionable pending-migration page without blocking `luna db:migrate` itself
   - [x] Return a non-leaking `503` and structured log event in production when the schema is stale; never migrate automatically at web-process boot
   - [x] Test fresh databases, partially applied migrations, current schemas, migration-command bootstrapping, reloads, SQLite, and PostgreSQL
 - [x] **[1.0] Installed-gem Helium reliability**
   - [x] Exercise the reported Helium installation path from a packed and isolated gem rather than a sibling source checkout
-  - [x] Treat the copies under `lib/hacienda/assets` as the canonical vendored assets and include every runtime file plus its licence in the gem
+  - [x] Treat the copies under `lib/lunula/assets` as the canonical vendored assets and include every runtime file plus its licence in the gem
   - [x] Generate and boot an application with `HELIUM_PATH` unavailable, proving no install-time Helium download or external package is required
   - [x] Verify vendored asset contents and licences in the isolated package test, and fail the release if any are absent
   - [x] Document `HELIUM_PATH` only as an optional framework-development override, not an application installation step
 - [x] **[1.0] Development mail inbox**
-  - [x] Add a built-in development-only inbox at `/hac/mail` backed by the existing `tmp/mail/*.eml` delivery files
+  - [x] Add a built-in development-only inbox at `/luna/mail` backed by the existing `tmp/mail/*.eml` delivery files
   - [x] List recipient, subject, and delivery time, with message detail, plain-text, HTML, raw-source, and copyable-link views
   - [x] Render HTML mail in a sandboxed frame with scripts, forms, and remote resources disabled by default
   - [x] Reject traversal and malformed message identifiers and reuse the dashboard's direct-`REMOTE_ADDR` local-development gate
   - [x] Keep the inbox unavailable in production unless a future explicit authentication and authorization contract is designed
   - [x] Ship the 1.0 inbox read-only; defer delete-one and clear-all operations until they have an explicit CSRF-protected design
 - [x] **[1.0] Route diagnostics and collision safety**
-  - [x] Extend `hac routes` with a `DOMAIN` column and `hac routes [METHOD] PATH` lookup for concrete request paths
+  - [x] Extend `luna routes` with a `DOMAIN` column and `luna routes [METHOD] PATH` lookup for concrete request paths
   - [x] Report the selected domain, declared pattern, action set and method, guards, route file, and source line where available
   - [x] Without a method, show every verb matching the concrete path; support filtering the full table by domain
   - [x] Reject exact duplicate normalized verb/path declarations at boot, including duplicates split across domains
@@ -104,23 +104,23 @@ unless they are explicitly described as experimental.
   - [x] Continue to allow one path for different HTTP verbs and intentional static-over-dynamic pairs such as `/pizzas/new` and `/pizzas/:id`
   - [x] Add reload, HEAD/GET, guard, action-set, normalization, and cross-domain collision regression tests
 - [x] **[1.0] Domain layout and test-location contract**
-  - [x] Keep business routes in each domain as the canonical layout and document why Hacienda does not use one global business-route file
+  - [x] Keep business routes in each domain as the canonical layout and document why Lunula does not use one global business-route file
   - [x] Keep infrastructure at the Rack layer in `config.ru`; do not add a second application-level route file before 1.0
   - [x] Keep domain-focused tests in `test/domains/<domain>` and full customer workflows in `test/integration`, mirroring domains without putting test code on the production autoload path
   - [x] Make domain generation create the mirrored location and action, REST, and authentication generation add meaningful tests without placeholder assertions
   - [x] Document where cross-domain workflow tests, repository contracts, action tests, and plain domain-object tests belong
-- [ ] **[1.0] Repository ergonomics before persistence API freeze**
-  - [ ] Add a small repository base or configuration macro over `Hacienda::Store` so domains do not repeat `STORE`, `module_function`, and basic delegation boilerplate
-  - [ ] Provide explicit `all`, `first`, `find`, `find_by`, `find_by!`, `save`, `delete`, and `dataset` operations with documented nil-versus-`Hacienda::NotFound` semantics
-  - [ ] Keep custom domain queries such as `available` explicit and backed by ordinary Sequel datasets; do not add dynamic `find_by_email`-style method generation
-  - [ ] Make `generate rest` emit the compact repository form and decide whether `generate domain` should omit an empty repository until persistence is requested
-  - [ ] Add repository generator coverage for custom primary keys, timestamps, coercions, optimistic locking, SQLite, and PostgreSQL
-  - [ ] Include the final repository shape in the public API contract and generated-application upgrade notes
+- [x] **[1.0] Repository ergonomics before persistence API freeze**
+  - [x] Add a small repository base or configuration macro over `Lunula::Store` so domains do not repeat `STORE`, `module_function`, and basic delegation boilerplate
+  - [x] Provide explicit `all`, `first`, `find`, `find_by`, `find_by!`, `save`, `delete`, and `dataset` operations with documented nil-versus-`Lunula::NotFound` semantics
+  - [x] Keep custom domain queries such as `available` explicit and backed by ordinary Sequel datasets; do not add dynamic `find_by_email`-style method generation
+  - [x] Make `generate rest` emit the compact repository form and make `generate domain` omit an empty repository until persistence is requested
+  - [x] Add repository and generator coverage for custom primary keys, timestamps, coercions, optimistic locking, SQLite, and PostgreSQL
+  - [x] Include the final repository shape in the public API contract and generated-application upgrade notes
 - [ ] **[1.0] Keep deployment tooling outside application runtime dependencies**
-  - [ ] Remove Kamal from the generated application's main Gemfile so its Active Support dependency does not describe Hacienda's runtime stack or occupy the application lockfile
+  - [ ] Remove Kamal from the generated application's main Gemfile so its Active Support dependency does not describe Lunula's runtime stack or occupy the application lockfile
   - [ ] Keep the generated Dockerfile and optional Kamal configuration while documenting Kamal as separately installed deployment tooling
   - [ ] Offer a separate deployment Gemfile or documented standalone installation for teams that require a project-locked Kamal version
-  - [ ] Verify production images still exclude deployment tooling and document that Hacienda cannot remove Kamal's own Active Support dependency without replacing or forking Kamal
+  - [ ] Verify production images still exclude deployment tooling and document that Lunula cannot remove Kamal's own Active Support dependency without replacing or forking Kamal
 - [ ] **[1.0] Production qualification and release candidate exercise**
   - [ ] Exercise a generated application under sustained web, job, scheduler, outbox, mail, session, and upload workloads
   - [ ] Test backup and restore, process crashes, graceful shutdown, migration rollback guidance, and secret rotation on the documented single-host deployment
@@ -147,7 +147,7 @@ unless they are explicitly described as experimental.
   - [x] Test adapter
   - [x] `deliver_later` for mail
   - [x] Durable database adapter with leases, retries, and failed-job visibility
-  - [x] `hac`/`fac jobs:work`, `jobs:failed`, and explicit retry commands
+  - [x] `luna jobs:work`, `jobs:failed`, and explicit retry commands
 - [ ] Sequel-native production queue
   - [x] Define parity as Solid Queue-level reliability and operational ergonomics without Active Job or Active Record, not API compatibility or imitation of Rails internals
   - [x] Phase 1 — transaction-safe job contract
@@ -155,16 +155,16 @@ unless they are explicitly described as experimental.
     - [x] Add `transaction.enqueue(job, ...)` with correct outer transaction, nested savepoint, rollback, and after-commit behavior
     - [x] Add a transactional job-outbox table for adapters that cannot share the Sequel transaction
     - [x] Add an outbox relay with leases, retries, failure visibility, and idempotent hand-off identifiers
-    - [x] Keep `Hacienda.enqueue` for work that does not depend on an uncommitted database change
+    - [x] Keep `Lunula.enqueue` for work that does not depend on an uncommitted database change
     - [x] Add contract validation and tests exercised by the built-in and external-adapter paths
     - [x] Document at-least-once delivery, idempotent job design, and transaction boundaries
   - [x] Phase 2 — delayed jobs and priorities
-    - [x] Add `Hacienda.enqueue_in(duration, job, ...)`
-    - [x] Add `Hacienda.enqueue_at(time, job, ...)`
+    - [x] Add `Lunula.enqueue_in(duration, job, ...)`
+    - [x] Add `Lunula.enqueue_at(time, job, ...)`
     - [x] Add numeric job priority with a documented default and ordering rule
     - [x] Order eligible work by queue selection, priority, scheduled time, and ID deterministically
     - [x] Add deterministic clock-based tests for delayed availability, retries, and ordering
-    - [x] Show scheduled work through `hac jobs:scheduled`
+    - [x] Show scheduled work through `luna jobs:scheduled`
   - [x] Phase 3 — worker throughput and queue selection
     - [x] Add atomic `claim_many(limit:)` while retaining the existing single-claim operation
     - [x] Add configurable worker thread count and batch size
@@ -182,7 +182,7 @@ unless they are explicitly described as experimental.
   - [x] Phase 5 — operational visibility
     - [x] Retain configurable completed and discarded-job history instead of always deleting successful rows
     - [x] Add retention and pruning commands for completed, discarded, and failed work
-    - [x] Add `hac jobs:status` for queue depth, oldest-job age, scheduled count, running workers, throughput, and failures
+    - [x] Add `luna jobs:status` for queue depth, oldest-job age, scheduled count, running workers, throughput, and failures
     - [x] Add CLI inspection for pending, running, scheduled, completed, discarded, and failed jobs
     - [x] Emit structured lifecycle notifications for enqueue, start, finish, retry, timeout, discard, and lease loss
     - [x] Provide hooks for application logging and external metrics without requiring a monitoring dependency
@@ -193,7 +193,7 @@ unless they are explicitly described as experimental.
     - [x] Add a scheduler process with graceful shutdown and health reporting
     - [x] Prevent duplicate runs across multiple schedulers with a unique task-and-time execution record
     - [x] Support enabling, disabling, and manually triggering a recurring task from the CLI
-    - [x] Add `hac jobs:recurring` to validate and inspect the loaded schedule
+    - [x] Add `luna jobs:recurring` to validate and inspect the loaded schedule
   - [x] Phase 7 — concurrency and uniqueness controls
     - [x] Add opt-in uniqueness keys with configurable conflict behavior and expiry
     - [x] Add opt-in execution concurrency limits keyed by job arguments or an explicit key
@@ -215,19 +215,19 @@ unless they are explicitly described as experimental.
     - [x] Keep dashboard operations read-only until explicit retry/discard/pause/resume authorization policy is designed
     - [x] Document that the dashboard is an operational tool, not a required runtime dependency
   - [ ] **[Post-1.0] Phase 10 — optional Sidekiq escape hatch**
-    - [ ] Publish `hacienda-sidekiq` separately so Sidekiq and Redis remain outside core dependencies
-    - [ ] Preserve Hacienda module jobs through one generic Sidekiq worker and the existing serializer contract
+    - [ ] Publish `lunula-sidekiq` separately so Sidekiq and Redis remain outside core dependencies
+    - [ ] Preserve Lunula module jobs through one generic Sidekiq worker and the existing serializer contract
     - [ ] Route transaction-dependent Sidekiq work through the transactional job outbox
     - [ ] Map queues, retries, delayed execution, and supported lifecycle options explicitly
     - [ ] Provide a plain-Ruby Sidekiq boot command, configuration guide, and adapter contract tests
     - [ ] Do not provide a first-party Solid Queue adapter while it requires Active Job, Active Record, and Railties
   - [ ] **[1.0] Phase 11 — production qualification**
-    - [x] Add `hac`/`fac jobs:benchmark` for sustained enqueue, claim, completion, retry, cleanup, and SQLite WAL qualification
+    - [x] Add `luna jobs:benchmark` for sustained enqueue, claim, completion, retry, cleanup, and SQLite WAL qualification
     - [x] Sample database latency while workers contend for the same SQLite database
     - [ ] **[1.0]** Test the same queue contract and failure suite with PostgreSQL through Sequel
     - [x] Document recommended worker, thread, batch, polling, WAL, busy-timeout, and lease settings
     - [x] Define queue-depth, latency, write-contention, and availability thresholds that indicate the application has outgrown SQLite
-    - [x] Publish a parity matrix showing supported Solid Queue capabilities and intentional Hacienda omissions
+    - [x] Publish a parity matrix showing supported Solid Queue capabilities and intentional Lunula omissions
 - [x] Flash messages
 - [x] Simple validation/errors convention
 - [x] Migration generator
@@ -283,7 +283,10 @@ unless they are explicitly described as experimental.
   - [ ] Add an optional direct-upload handshake with signed constraints and server-side completion/metadata validation
   - [ ] Integrate orphan reconciliation, replacement, retention, deletion, and application-owned reference lookup across local and remote services
   - [ ] Test against a real S3-compatible service in CI and document compatibility, CORS, lifecycle, backup, cost, and migration concerns
-- [x] Default-on Hacienda Navigation enhancement
+- [x] Default-on Morpheus enhancement
+  - [x] Extract navigation and prefetching into the publishable `@lunula/morpheus` package
+  - [x] Vendor package-owned source and Idiomorph into Lunula and generated applications
+  - [x] Verify package contents and vendored-copy consistency in CI
   - [x] Intercept same-origin GET links and morph one content target with Idiomorph
   - [x] Intent prefetching with a bounded, expiring cache
   - [x] Preserve browser history, title, focus, scroll, and permanent elements
@@ -292,16 +295,16 @@ unless they are explicitly described as experimental.
   - [x] Helium MutationObserver integration without global teardown
   - [x] jsdom integration tests and Playwright browser smoke tests
   - [ ] **[Post-1.0]** Consider native form interception only after redirect, validation, upload, and history semantics are designed
-  - [x] Document how Hacienda Navigation composes with Helium's existing SSE support for live updates without adding a client router
-- [ ] **[Post-1.0] Hacienda Channels: first-party WebSocket support**
-  - [ ] Define a small Hacienda-native connection/channel API rather than copying Action Cable classes or protocol compatibility
+  - [x] Document how Morpheus composes with Helium's existing SSE support for live updates without adding a client router
+- [ ] **[Post-1.0] Lunula Channels: first-party WebSocket support**
+  - [ ] Define a small Lunula-native connection/channel API rather than copying Action Cable classes or protocol compatibility
   - [ ] Keep SSE as the simpler server-to-client option and document when duplex WebSockets are justified
   - [ ] Build the Rack WebSocket endpoint on a maintained protocol library and publish a tested Rack server compatibility matrix
   - [ ] Authenticate the connection from the generated session/current-user stack and authorize every subscription explicitly
   - [ ] Enforce allowed origins, message-size limits, subscription limits, rate limits, heartbeat timeouts, and bounded outbound queues
   - [ ] Provide subscribe, unsubscribe, receive, disconnect, reject, stream, and broadcast lifecycle hooks
   - [ ] Ship a small browser client with reconnect backoff, heartbeat detection, automatic resubscription, and lifecycle events
-  - [ ] Support JSON messages and server-rendered HTML fragments that compose with Hacienda Navigation and Helium
+  - [ ] Support JSON messages and server-rendered HTML fragments that compose with Morpheus and Helium
   - [ ] Start with an in-process pub/sub adapter for one web process and define an adapter contract for multi-process delivery
   - [ ] Provide an optional PostgreSQL or Redis broadcast adapter without making either service mandatory
   - [ ] Define slow-consumer, backpressure, ordering, duplicate-delivery, deploy/restart, and connection-draining behavior
@@ -313,18 +316,18 @@ unless they are explicitly described as experimental.
   - [x] Preserve form params, cache parsed request data, and rewind the body
 - [ ] **[Post-1.0] Optional [Herb](https://herb-tools.dev/) HTML-aware ERB support**
   - [ ] Add the `herb` Ruby gem as an optional development/view dependency, not an unconditional production dependency
-  - [ ] Prototype `Herb::Engine` behind the renderer boundary and compare it with Hacienda's current ERB compiler before changing defaults
+  - [ ] Prototype `Herb::Engine` behind the renderer boundary and compare it with Lunula's current ERB compiler before changing defaults
   - [ ] Preserve automatic escaping, safe HTML, layouts, partials, components, helpers, source locations, and development reload behavior
-  - [ ] Configure Herb to include Hacienda's `app/**/*.erb` naming convention rather than requiring a disruptive `.html.erb` rename
-  - [ ] Generate a minimal `.herb.yml` with the plain-Ruby framework mode and documented Hacienda-specific rule choices
-  - [ ] Add `hac templates:check` for HTML-aware ERB parsing and validation with actionable file, line, and column diagnostics
+  - [ ] Configure Herb to include Lunula's `app/**/*.erb` naming convention rather than requiring a disruptive `.html.erb` rename
+  - [ ] Generate a minimal `.herb.yml` with the plain-Ruby framework mode and documented Lunula-specific rule choices
+  - [ ] Add `luna templates:check` for HTML-aware ERB parsing and validation with actionable file, line, and column diagnostics
   - [ ] Offer Herb linting and language-server setup as development tooling while keeping Node.js out of the production runtime
   - [ ] Keep the experimental formatter opt-in until it is stable enough for generated files and CI check mode
-  - [ ] Validate every generated template and example application, including Helium attributes and Hacienda helper output
+  - [ ] Validate every generated template and example application, including Helium attributes and Lunula helper output
   - [ ] Benchmark parse, compile, render, boot, and reload costs before considering Herb as the default engine
   - [ ] Document fallback to the existing renderer and test mixed or incremental adoption during the transition
 - [ ] **[Post-1.0] i18n integration**
-  - [ ] Integrate the standard Ruby `i18n` gem without adding a Hacienda-specific translation DSL
+  - [ ] Integrate the standard Ruby `i18n` gem without adding a Lunula-specific translation DSL
   - [ ] Add explicit default-locale, available-locale, fallback, and translation-path configuration
   - [ ] Resolve locale per request through a configurable context loader or application hook
   - [ ] Provide `t`/`translate` and locale-aware formatting helpers in views and actions
@@ -338,8 +341,8 @@ unless they are explicitly described as experimental.
   - [x] Persistent single-server SQLite volume with multi-server guidance
   - [x] Migration, rollback, backup, and production limitations documented
   - [x] Production logs written to stdout
-- [ ] **[Post-1.0] Hacienda edge runtime / Thruster alternative**
-  - [ ] Measure generated applications behind Puma and Kamal Proxy before defining which missing edge responsibilities Hacienda should own
+- [ ] **[Post-1.0] Lunula edge runtime / Thruster alternative**
+  - [ ] Measure generated applications behind Puma and Kamal Proxy before defining which missing edge responsibilities Lunula should own
   - [ ] Define a small optional sidecar or maintained-server integration rather than implementing a general HTTP proxy inside Rack
   - [ ] Provide precompressed asset negotiation, immutable fingerprint caching, and safe cache/header defaults
   - [ ] Support efficient file delivery through `X-Sendfile` or `X-Accel-Redirect` where the selected server/proxy provides it
@@ -352,8 +355,8 @@ unless they are explicitly described as experimental.
   - [x] Run durable jobs and the transactional outbox from the same local database
   - [x] Keep the default cache and rate limiter in-process for one web process
   - [x] Keep uploads on a persistent local volume by default
-  - [x] Add `hac`/`fac db:check` for SQLite version, WAL mode, busy-timeout, foreign keys, and unsafe synced-storage paths
-  - [x] Add `hac`/`fac db:checkpoint` for explicit WAL maintenance
+  - [x] Add `luna db:check` for SQLite version, WAL mode, busy-timeout, foreign keys, and unsafe synced-storage paths
+  - [x] Add `luna db:checkpoint` for explicit WAL maintenance
   - [x] Provide and snapshot-test a Litestream backup-and-restore template
   - [x] Document and assert a separate backup strategy for locally stored uploads
   - [x] Define write-contention and availability thresholds that indicate an application has outgrown SQLite
@@ -373,8 +376,8 @@ unless they are explicitly described as experimental.
 - [ ] **[Post-1.0] Cross-domain dependency checking**
   - [ ] Define what constitutes a domain's public entry points and distinguish domain dependencies from framework, application, and shared-library references
   - [ ] Choose a small application-owned dependency manifest or declaration format without introducing a container or mandatory runtime indirection
-  - [ ] Add `hac domains` to list domains, declared dependencies, reverse dependencies, cycles, and undeclared references
-  - [ ] Add `hac domains:check` with a non-zero exit status for undeclared dependencies, forbidden dependency directions, and cycles
+  - [ ] Add `luna domains` to list domains, declared dependencies, reverse dependencies, cycles, and undeclared references
+  - [ ] Add `luna domains:check` with a non-zero exit status for undeclared dependencies, forbidden dependency directions, and cycles
   - [ ] Check Ruby constants, routes/guards, events/subscribers, jobs, mailers, and view/component references where static analysis is reliable
   - [ ] Provide narrow ignores for metaprogramming and dynamic constant lookup, with every suppression visible and explainable
   - [ ] Allow applications to define architectural layers or dependency directions without imposing one universal domain topology
@@ -382,13 +385,13 @@ unless they are explicitly described as experimental.
   - [ ] Publish graph output in a stable machine-readable format for editor, documentation, and visualization tooling
   - [ ] Document that the checker verifies declared source dependencies rather than enforcing runtime security isolation
 - [ ] **[1.0] Framework maintainability before wider contribution**
-  - [ ] Split `lib/hacienda/cli.rb` into command-focused files
-  - [ ] Split `lib/hacienda/jobs.rb` into adapter, worker, scheduler, serializer, controls, and instrumentation files
-  - [ ] Split `lib/hacienda/generator.rb` into scaffold, app templates, domain/resource templates, auth templates, and deployment templates
+  - [ ] Split `lib/lunula/cli.rb` into command-focused files
+  - [ ] Split `lib/lunula/jobs.rb` into adapter, worker, scheduler, serializer, controls, and instrumentation files
+  - [ ] Split `lib/lunula/generator.rb` into scaffold, app templates, domain/resource templates, auth templates, and deployment templates
 - [ ] **[1.0] Generated app upgrade story**
   - [ ] **[1.0]** Publish documented generated-file diffs per release
   - [ ] **[1.0]** Document manual upgrades for config, middleware, migrations, assets, and deployment files
-  - [ ] **[Post-1.0]** Consider `hac update` for safe template refreshes with explicit review
+  - [ ] **[Post-1.0]** Consider `luna update` for safe template refreshes with explicit review
 - [x] Generator snapshot tests for new apps, REST resources, and authentication
 
 ## Authentication roadmap
@@ -412,14 +415,14 @@ unless they are explicitly described as experimental.
 - [x] CSRF form helper
 - [x] Generated apps include CSRF protection by default
 - [x] Session middleware in generated apps
-- [x] Session secret configurable via `HACIENDA_SESSION_SECRET`
+- [x] Session secret configurable via `LUNULA_SESSION_SECRET`
 - [x] Production requires a non-development session secret
 - [x] Encrypted credentials
   - [x] `config/credentials.yml.enc`
   - [x] `config/master.key`
-  - [x] `HACIENDA_MASTER_KEY` support for production
-  - [x] `hac`/`fac credentials:edit`
-  - [x] `hac`/`fac credentials:show`
+  - [x] `LUNULA_MASTER_KEY` support for production
+  - [x] `luna credentials:edit`
+  - [x] `luna credentials:show`
   - [x] Runtime helper for reading credentials
 - [x] Secure cookie defaults for production
 - [x] SameSite cookie defaults
@@ -430,14 +433,14 @@ unless they are explicitly described as experimental.
 - [x] HEAD requests match GET routes
 - [x] Request logging that avoids sensitive params
 - [x] Canonical application URL and host authorization
-  - [x] Generate explicit `HACIENDA_APP_URL` / credentials-backed app URL configuration
+  - [x] Generate explicit `LUNULA_APP_URL` / credentials-backed app URL configuration
   - [x] Use the canonical URL, not `request.base_url`, when generating email verification, password reset, and unsubscribe URLs
-  - [x] Provide `Hacienda.app_url` for magic-link and signed URL generators
+  - [x] Provide `Lunula.app_url` for magic-link and signed URL generators
   - [x] Add host allowlist middleware for generated production applications
   - [x] Document proxy requirements for trusted `Host` and `X-Forwarded-*` headers
 - [x] Session lifecycle hardening
   - [x] Add `expire_after` to generated cookie sessions
-  - [x] Wire Rack session old-secret rotation so deployments can rotate `HACIENDA_SESSION_SECRET` without logging everyone out immediately
+  - [x] Wire Rack session old-secret rotation so deployments can rotate `LUNULA_SESSION_SECRET` without logging everyone out immediately
   - [x] Document cookie session replay trade-offs after logout
   - [x] Add optional Sequel-backed session store for revocation and stolen-session invalidation
 - [x] Add production HSTS support to security headers
@@ -490,7 +493,7 @@ unless they are explicitly described as experimental.
 Work in this order unless a release-blocking defect changes the sequence:
 
 1. **P0 — safe first run:** actionable pending-migration detection and an installed-gem Helium path that requires no external package or sibling checkout.
-2. **P0 — deterministic routing:** reject exact, structural, ambiguous, and cross-domain route collisions at boot, then add concrete-path/domain diagnostics to `hac routes`.
+2. **P0 — deterministic routing:** reject exact, structural, ambiguous, and cross-domain route collisions at boot, then add concrete-path/domain diagnostics to `luna routes`.
 3. **P0 — 1.0 installability:** packaged-gem generation, isolated boot, and current generator failures.
 4. **P0 — trustworthy verification:** green clean-checkout suites, temporary test databases, and CI across supported Ruby and database versions.
 5. **P0 — security assurance:** request limits, upload boundaries, authentication/authorization review, automated audits, and a security policy.
@@ -502,9 +505,9 @@ Work in this order unless a release-blocking defect changes the sequence:
 11. **P1 — first post-1.0 production adapters:** durable SQL caching and optional S3-compatible private object storage.
 12. **P2 — architecture integrity:** explicit cross-domain dependency checking, cycle detection, CLI reporting, and CI enforcement.
 13. **P2 — first post-1.0 application feature:** i18n integration.
-14. **P2 — edge delivery:** measure and build an optional Hacienda edge runtime/Thruster alternative without duplicating Kamal Proxy.
+14. **P2 — edge delivery:** measure and build an optional Lunula edge runtime/Thruster alternative without duplicating Kamal Proxy.
 15. **P2 — view tooling:** optional Herb parsing, validation, linting, editor support, and renderer evaluation.
-16. **P2 — realtime applications:** Hacienda Channels with secure duplex WebSockets and an explicit multi-process adapter story.
+16. **P2 — realtime applications:** Lunula Channels with secure duplex WebSockets and an explicit multi-process adapter story.
 17. **P2 — measured optimization:** benchmark and index route lookup only when measurements justify it.
 18. **P3 — demand-driven ecosystem work:** Sidekiq, alternative shared stores, multi-host deployment, advanced authentication, and native form interception.
 
@@ -515,8 +518,8 @@ These are design constraints, not implementation tasks:
 - Rails-style controllers
 - ActiveRecord dependency
 - ActionMailer-style inheritance
-- A Redis-scale distributed queue inside the framework; Hacienda develops the SQL-backed queue deeply and keeps Sidekiq optional
-- Solid Queue as a dependency or first-party adapter while it requires Active Job, Active Record, and Railties; Hacienda builds the equivalent Sequel-native capabilities it actually needs
+- A Redis-scale distributed queue inside the framework; Lunula develops the SQL-backed queue deeply and keeps Sidekiq optional
+- Solid Queue as a dependency or first-party adapter while it requires Active Job, Active Record, and Railties; Lunula builds the equivalent Sequel-native capabilities it actually needs
 - Redis, PostgreSQL, or object storage as mandatory production infrastructure
 - Mandatory event bus, container, or unit-of-work in every app — domain events and aggregates ship as opt-in, plain-Ruby conventions you reach for per domain, never core furniture
 - Turbo as a required dependency

@@ -3,23 +3,23 @@
 require_relative "test_helper"
 
 class SecurityPropertiesTest < Minitest::Test
-  include Hacienda::Responses
+  include Lunula::Responses
 
   ITERATIONS = 100
 
   def setup
     @random = Random.new(20_260_715)
-    @previous_app_url = ENV["HACIENDA_APP_URL"]
-    ENV["HACIENDA_APP_URL"] = "https://example.test"
+    @previous_app_url = ENV["LUNULA_APP_URL"]
+    ENV["LUNULA_APP_URL"] = "https://example.test"
   end
 
   def teardown
-    ENV["HACIENDA_APP_URL"] = @previous_app_url
-    ENV.delete("HACIENDA_APP_URL") unless @previous_app_url
+    ENV["LUNULA_APP_URL"] = @previous_app_url
+    ENV.delete("LUNULA_APP_URL") unless @previous_app_url
   end
 
   def test_route_parameters_never_cross_path_segments
-    route = Hacienda::Route.new(
+    route = Lunula::Route.new(
       verb: "GET",
       path: "/posts/:id",
       action_name: :show,
@@ -37,7 +37,7 @@ class SecurityPropertiesTest < Minitest::Test
   def test_params_normalization_round_trips_random_nested_scalars
     ITERATIONS.times do
       source = {"item" => {"name" => random_text, "values" => [@random.rand(10_000), nil, true]}}
-      params = Hacienda::Params.new(source)
+      params = Lunula::Params.new(source)
 
       assert_equal source["item"]["name"], params.dig(:item, :name)
       assert_equal({item: {name: source["item"]["name"], values: source["item"]["values"]}}, params.to_h)
@@ -50,12 +50,12 @@ class SecurityPropertiesTest < Minitest::Test
       refute_match(/[\r\n]/, redirect(relative).headers.fetch("location"))
 
       host = "#{random_text.downcase}.invalid"
-      assert_raises(Hacienda::UnsafeRedirect) { redirect("https://#{host}/path") }
+      assert_raises(Lunula::UnsafeRedirect) { redirect("https://#{host}/path") }
     end
   end
 
   def test_signed_tokens_reject_random_single_byte_mutations
-    signer = Hacienda::SignedToken.new(secret: "property-test-secret")
+    signer = Lunula::SignedToken.new(secret: "property-test-secret")
 
     ITERATIONS.times do |index|
       token = signer.generate({index:, value: random_text}, purpose: "property", expires_in: 60)
@@ -69,8 +69,8 @@ class SecurityPropertiesTest < Minitest::Test
   end
 
   def test_credentials_reject_random_ciphertext_mutations
-    Dir.mktmpdir("hacienda-credential-properties") do |root|
-      credentials = Hacienda::Credentials.new(root:).ensure_files
+    Dir.mktmpdir("lunula-credential-properties") do |root|
+      credentials = Lunula::Credentials.new(root:).ensure_files
       credentials.write_text("api_key: value\n")
       original = File.binread(credentials.encrypted_path)
 
@@ -80,7 +80,7 @@ class SecurityPropertiesTest < Minitest::Test
         mutated.setbyte(offset, mutated.getbyte(offset) ^ 1)
         File.binwrite(credentials.encrypted_path, mutated)
 
-        assert_raises(Hacienda::Credentials::Error) { Hacienda::Credentials.new(root:).read_text }
+        assert_raises(Lunula::Credentials::Error) { Lunula::Credentials.new(root:).read_text }
       end
     end
   end
@@ -90,8 +90,8 @@ class SecurityPropertiesTest < Minitest::Test
       args = [@random.rand(10_000), random_text, [true, false, nil]]
       kwargs = {label: random_text, count: @random.rand(100)}
 
-      loaded_args, loaded_kwargs = Hacienda::Jobs::Serializer.load(
-        Hacienda::Jobs::Serializer.dump(args:, kwargs:)
+      loaded_args, loaded_kwargs = Lunula::Jobs::Serializer.load(
+        Lunula::Jobs::Serializer.dump(args:, kwargs:)
       )
 
       assert_equal args, loaded_args
@@ -102,7 +102,7 @@ class SecurityPropertiesTest < Minitest::Test
   def test_storage_keys_reject_random_traversal_segments
     ITERATIONS.times do
       key = "#{random_text}/../#{random_text}"
-      assert_raises(Hacienda::Storage::InvalidKey) { Hacienda::Storage.validate_key!(key) }
+      assert_raises(Lunula::Storage::InvalidKey) { Lunula::Storage.validate_key!(key) }
     end
   end
 

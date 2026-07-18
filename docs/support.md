@@ -1,7 +1,7 @@
 # Supported Versions
 
-This is the support window intended for the Hacienda 1.0 line. CI is the source
-of truth for tested combinations; dependency constraints in `hacienda.gemspec`
+This is the support window intended for the Lunula 1.0 line. CI is the source
+of truth for tested combinations; dependency constraints in `lunula.gemspec`
 remain authoritative for installation.
 
 | Component | Supported contract | CI coverage |
@@ -17,7 +17,7 @@ The minimum Ruby job is a compatibility floor, not a promise of security fixes
 from the Ruby project. Production users must run an upstream- or vendor-supported
 Ruby patch release.
 
-Hacienda supports the current dependency constraints, not arbitrary older
+Lunula supports the current dependency constraints, not arbitrary older
 patch releases inside those ranges. A reported bug must reproduce on the latest
 compatible patch before it is treated as a framework defect.
 
@@ -26,6 +26,6 @@ described as SQLite-only, including WAL diagnostics and checkpoint commands,
 are not PostgreSQL contracts. Additional PostgreSQL majors become supported
 only when added to CI.
 
-Support for an upstream version normally ends in the first Hacienda minor
+Support for an upstream version normally ends in the first Lunula minor
 release after upstream maintenance ends. Security requirements may force an
 earlier change, documented in the changelog and upgrade notes.

@@ -2,8 +2,8 @@
 
 module Orders
   class Order
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
 
     attributes :id, :public_token, :total_cents, :status, :created_at, :updated_at
     attribute :customer_name, default: ""

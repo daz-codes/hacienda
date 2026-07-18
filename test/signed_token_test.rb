@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class SignedTokenTest < Minitest::Test
   def setup
-    @tokens = Hacienda::SignedToken.new(secret: "test-secret")
+    @tokens = Lunula::SignedToken.new(secret: "test-secret")
   end
 
   def test_generates_and_verifies_payload_for_a_purpose
@@ -35,7 +35,7 @@ class SignedTokenTest < Minitest::Test
 
   def test_verifies_tokens_signed_with_an_old_secret_after_rotation
     token = @tokens.generate({user_id: 42}, purpose: "email_verification", expires_in: 60)
-    rotated = Hacienda::SignedToken.new(secret: "new-secret", old_secrets: ["test-secret"])
+    rotated = Lunula::SignedToken.new(secret: "new-secret", old_secrets: ["test-secret"])
 
     payload = rotated.verify(token, purpose: "email_verification")
 
@@ -43,7 +43,7 @@ class SignedTokenTest < Minitest::Test
   end
 
   def test_signs_new_tokens_with_the_current_secret_only
-    rotated = Hacienda::SignedToken.new(secret: "new-secret", old_secrets: ["test-secret"])
+    rotated = Lunula::SignedToken.new(secret: "new-secret", old_secrets: ["test-secret"])
     token = rotated.generate({user_id: 42}, purpose: "email_verification", expires_in: 60)
 
     assert_equal 42, rotated.verify(token, purpose: "email_verification")["user_id"]
@@ -51,9 +51,9 @@ class SignedTokenTest < Minitest::Test
   end
 
   def test_rejects_tokens_signed_with_an_unknown_secret
-    token = Hacienda::SignedToken.new(secret: "other-secret")
+    token = Lunula::SignedToken.new(secret: "other-secret")
       .generate({user_id: 42}, purpose: "email_verification", expires_in: 60)
-    rotated = Hacienda::SignedToken.new(secret: "new-secret", old_secrets: ["test-secret"])
+    rotated = Lunula::SignedToken.new(secret: "new-secret", old_secrets: ["test-secret"])
 
     assert_nil rotated.verify(token, purpose: "email_verification")
   end

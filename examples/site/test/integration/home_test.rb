@@ -8,7 +8,7 @@ class HomeTest < ApplicationTest
     get "/"
 
     assert_equal 200, last_response.status
-    assert_includes last_response.body, "The Haçienda"
+    assert_includes last_response.body, "The Lunula"
     assert_includes last_response.body, "must be built"
     assert_includes last_response.body, "Build a blog in 10 minutes"
     assert_includes last_response.body, "Posts.publish(post)"
@@ -27,7 +27,7 @@ class HomeTest < ApplicationTest
 
     assert_equal 200, last_response.status
     assert_includes last_response.body, "Build a working blog"
-    assert_includes last_response.body, "hac generate rest posts"
+    assert_includes last_response.body, "luna generate rest posts"
     assert_includes last_response.body, "module Posts"
   end
 
@@ -35,7 +35,7 @@ class HomeTest < ApplicationTest
     get "/guides/store"
 
     assert_equal 200, last_response.status
-    assert_includes last_response.body, "Build Haçienda Supply"
+    assert_includes last_response.body, "Build Lunula Supply"
     assert_includes last_response.body, "Authentication and guarded routes"
     assert_includes last_response.body, "Deployment"
     assert_includes last_response.body, "id=\"1-prerequisites\""
@@ -78,11 +78,11 @@ class HomeTest < ApplicationTest
   end
 
   def test_navigation_response_morphs_the_guide_content
-    get "/guides/blog", {}, "HTTP_X_HACIENDA_NAVIGATION" => "true"
+    get "/guides/blog", {}, "HTTP_X_LUNULA_NAVIGATION" => "true"
 
     assert_equal 200, last_response.status
-    assert_equal "morph", last_response.headers["x-hacienda-navigation"]
-    assert_match(/\A<div id="hacienda-page"/, last_response.body)
+    assert_equal "morph", last_response.headers["x-morpheus-navigation"]
+    assert_match(/\A<div id="morpheus-page"/, last_response.body)
   end
 
   private

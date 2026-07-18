@@ -7,11 +7,11 @@ module Products
     module_function
 
     def in_stock(product:, subscriber:)
-      product_url = Hacienda.app_url("/products/#{Rack::Utils.escape_path(product.id.to_s)}")
-      unsubscribe_url = Hacienda.app_url("/unsubscribe?#{Rack::Utils.build_query(token: unsubscribe_token(subscriber))}")
-      name = Hacienda::HTML.escape(product.name)
+      product_url = Lunula.app_url("/products/#{Rack::Utils.escape_path(product.id.to_s)}")
+      unsubscribe_url = Lunula.app_url("/unsubscribe?#{Rack::Utils.build_query(token: unsubscribe_token(subscriber))}")
+      name = Lunula::HTML.escape(product.name)
 
-      Hacienda.mail(
+      Lunula.mail(
         to: subscriber.email,
         subject: "#{product.name} is back in stock",
         text: <<~TEXT,
@@ -31,7 +31,7 @@ module Products
     end
 
     def unsubscribe_token(subscriber)
-      Hacienda.signed_token.generate(
+      Lunula.signed_token.generate(
         {subscriber_id: subscriber.id, email: subscriber.email},
         purpose: "product_unsubscribe",
         expires_in: 30 * 24 * 60 * 60

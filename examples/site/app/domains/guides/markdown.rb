@@ -10,7 +10,7 @@ module Guides
     module_function
 
     def render(source)
-      source = source.gsub("](../examples/", "](https://github.com/hacienda-rb/hacienda/tree/main/examples/")
+      source = source.gsub("](../examples/", "](https://github.com/daz-codes/lunula/tree/main/examples/")
       markup = RDoc::Markdown.parse(source)
       html = RDoc::Markup::ToHtml.new(RDoc::Options.new).convert(markup)
       headings = []
@@ -31,7 +31,7 @@ module Guides
       end
 
       {
-        html: Hacienda::HTML.safe(html),
+        html: Lunula::HTML.safe(html),
         headings:
       }
     end

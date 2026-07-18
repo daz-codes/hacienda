@@ -5,7 +5,7 @@ require "json"
 
 class AssetsTest < Minitest::Test
   def setup
-    @root = Dir.mktmpdir("hacienda-assets")
+    @root = Dir.mktmpdir("lunula-assets")
     @assets_root = File.join(@root, "public", "assets")
     FileUtils.mkdir_p(File.join(@assets_root, "modules"))
     File.binwrite(File.join(@assets_root, "modules", "dependency.js"), "export const value = 1;\n")
@@ -26,7 +26,7 @@ class AssetsTest < Minitest::Test
   end
 
   def test_precompile_fingerprints_assets_and_rewrites_dependencies
-    manifest = Hacienda::Assets.precompile(root: @root)
+    manifest = Lunula::Assets.precompile(root: @root)
 
     application = manifest.fetch("assets").fetch("application.js")
     dependency = manifest.fetch("assets").fetch("modules/dependency.js")
@@ -45,12 +45,12 @@ class AssetsTest < Minitest::Test
   end
 
   def test_dependency_changes_update_parent_fingerprint_and_remove_old_outputs
-    first = Hacienda::Assets.precompile(root: @root)
+    first = Lunula::Assets.precompile(root: @root)
     old_application = first.fetch("assets").fetch("application.js")
     old_dependency = first.fetch("assets").fetch("modules/dependency.js")
 
     File.binwrite(File.join(@assets_root, "modules", "dependency.js"), "export const value = 2;\n")
-    second = Hacienda::Assets.precompile(root: @root)
+    second = Lunula::Assets.precompile(root: @root)
 
     refute_equal old_application, second.fetch("assets").fetch("application.js")
     refute_equal old_dependency, second.fetch("assets").fetch("modules/dependency.js")
@@ -59,34 +59,34 @@ class AssetsTest < Minitest::Test
   end
 
   def test_path_uses_manifest_only_in_production_and_preserves_suffixes
-    manifest = Hacienda::Assets.precompile(root: @root)
+    manifest = Lunula::Assets.precompile(root: @root)
     compiled = manifest.fetch("assets").fetch("application.js")
 
     assert_equal "/assets/application.js?v=1#module",
-      Hacienda::Assets.path("application.js?v=1#module", root: @root, environment: "development")
+      Lunula::Assets.path("application.js?v=1#module", root: @root, environment: "development")
     assert_equal "/assets/#{compiled}?v=1#module",
-      Hacienda::Assets.path("/assets/application.js?v=1#module", root: @root, environment: "production")
+      Lunula::Assets.path("/assets/application.js?v=1#module", root: @root, environment: "production")
   end
 
   def test_production_path_requires_a_valid_manifest_entry
-    error = assert_raises(Hacienda::Assets::Error) do
-      Hacienda::Assets.path("missing.js", root: @root, environment: "production")
+    error = assert_raises(Lunula::Assets::Error) do
+      Lunula::Assets.path("missing.js", root: @root, environment: "production")
     end
     assert_includes error.message, "asset manifest not found"
 
-    Hacienda::Assets.precompile(root: @root)
-    error = assert_raises(Hacienda::Assets::Error) do
-      Hacienda::Assets.path("missing.js", root: @root, environment: "production")
+    Lunula::Assets.precompile(root: @root)
+    error = assert_raises(Lunula::Assets::Error) do
+      Lunula::Assets.path("missing.js", root: @root, environment: "production")
     end
     assert_includes error.message, "assets:precompile"
   end
 
   def test_clobber_removes_compiled_assets_but_preserves_sources
-    manifest = Hacienda::Assets.precompile(root: @root)
+    manifest = Lunula::Assets.precompile(root: @root)
     orphan = File.join(@assets_root, "orphan-0123456789abcdef.js")
     File.binwrite(orphan, "stale")
 
-    assert_equal manifest.fetch("assets").length + 1, Hacienda::Assets.clobber(root: @root)
+    assert_equal manifest.fetch("assets").length + 1, Lunula::Assets.clobber(root: @root)
     manifest.fetch("assets").each_value do |compiled|
       refute_path_exists File.join(@assets_root, compiled)
     end
@@ -96,9 +96,9 @@ class AssetsTest < Minitest::Test
   end
 
   def test_rack_options_set_immutable_headers_only_for_fingerprinted_assets
-    manifest = Hacienda::Assets.precompile(root: @root)
+    manifest = Lunula::Assets.precompile(root: @root)
     compiled = manifest.fetch("assets").fetch("application.js")
-    app = Rack::Static.new(->(_env) { [404, {}, []] }, **Hacienda::Assets.rack_options(root: @root))
+    app = Rack::Static.new(->(_env) { [404, {}, []] }, **Lunula::Assets.rack_options(root: @root))
     request = Rack::MockRequest.new(app)
 
     logical_response = request.get("/assets/application.js")
@@ -109,13 +109,13 @@ class AssetsTest < Minitest::Test
   end
 
   def test_rejects_traversal_and_cyclic_dependencies
-    assert_raises(Hacienda::Assets::Error) do
-      Hacienda::Assets.path("../secret", root: @root, environment: "development")
+    assert_raises(Lunula::Assets::Error) do
+      Lunula::Assets.path("../secret", root: @root, environment: "development")
     end
 
     File.binwrite(File.join(@assets_root, "first.js"), %(import "./second.js";\n))
     File.binwrite(File.join(@assets_root, "second.js"), %(import "./first.js";\n))
-    error = assert_raises(Hacienda::Assets::Error) { Hacienda::Assets.precompile(root: @root) }
+    error = assert_raises(Lunula::Assets::Error) { Lunula::Assets.precompile(root: @root) }
     assert_includes error.message, "cyclic asset dependency"
   end
 end

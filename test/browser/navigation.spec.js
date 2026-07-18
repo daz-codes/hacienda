@@ -2,8 +2,8 @@ import {expect, test} from "@playwright/test";
 
 test("prefetches, morphs, preserves state, and handles browser history", async ({page}) => {
   await page.addInitScript(() => {
-    window.haciendaEvents = [];
-    document.addEventListener("hacienda:load", event => window.haciendaEvents.push(event.detail.navigationType));
+    window.morpheusEvents = [];
+    document.addEventListener("morpheus:load", event => window.morpheusEvents.push(event.detail.navigationType));
   });
   await page.goto("/");
   await page.locator("#layout").evaluate(node => { node.dataset.identity = "preserved"; });
@@ -17,12 +17,12 @@ test("prefetches, morphs, preserves state, and handles browser history", async (
   await expect(page.locator("#permanent")).toHaveText("keep");
   await expect(page.locator("#reactive")).toHaveAttribute("@data", /next/);
   await expect.poll(async () => (await (await page.request.get("/requests")).json())["/next"]).toBe(1);
-  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("hacienda-page");
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("morpheus-page");
 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("h1")).toHaveText("home");
-  await expect.poll(() => page.evaluate(() => window.haciendaEvents.includes("popstate"))).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.morpheusEvents.includes("popstate"))).toBe(true);
 });
 
 test("falls back to a full load for a non-2xx response", async ({page}) => {

@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-service = if Hacienda.env.test?
-  Hacienda::Storage::MemoryService.new
-elsif Hacienda.env.production?
-  Hacienda::Storage::NullService.new
+service = if Lunula.env.test?
+  Lunula::Storage::MemoryService.new
+elsif Lunula.env.production?
+  Lunula::Storage::NullService.new
 else
-  Hacienda::Storage::DiskService.new(root: File.join(APP_ROOT, "storage"))
+  Lunula::Storage::DiskService.new(root: File.join(APP_ROOT, "storage"))
 end
 
-Hacienda.configure_storage(service:)
+Lunula.configure_storage(service:)

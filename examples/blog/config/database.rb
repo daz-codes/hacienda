@@ -2,10 +2,10 @@
 
 require "sequel"
 
-environment = Hacienda.env.name
+environment = Lunula.env.name
 default_url = "sqlite://#{File.join(APP_ROOT, "db", "#{environment}.sqlite3")}"
 
 DB = Sequel.connect(ENV.fetch("DATABASE_URL", default_url))
 if DB.database_type == :sqlite
-  Hacienda::SQLite.configure(DB, wal: environment != "test")
+  Lunula::SQLite.configure(DB, wal: environment != "test")
 end

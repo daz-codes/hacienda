@@ -4,11 +4,11 @@ require_relative "test_helper"
 
 class MailerTest < Minitest::Test
   def setup
-    @root = Dir.mktmpdir("hacienda-mail")
-    Hacienda.clear_mail_deliveries
-    Hacienda.clear_enqueued_jobs
-    Hacienda.configure_jobs(adapter: :inline)
-    Hacienda.configure_mail(
+    @root = Dir.mktmpdir("lunula-mail")
+    Lunula.clear_mail_deliveries
+    Lunula.clear_enqueued_jobs
+    Lunula.configure_jobs(adapter: :inline)
+    Lunula.configure_mail(
       root: @root,
       delivery: :test,
       from: "hello@example.test"
@@ -16,29 +16,29 @@ class MailerTest < Minitest::Test
   end
 
   def teardown
-    Hacienda.clear_mail_deliveries
-    Hacienda.clear_enqueued_jobs
-    Hacienda.configure_jobs(adapter: :inline)
+    Lunula.clear_mail_deliveries
+    Lunula.clear_enqueued_jobs
+    Lunula.configure_jobs(adapter: :inline)
     FileUtils.rm_rf(@root)
   end
 
   def test_mail_can_be_delivered_to_test_adapter
-    Hacienda.mail(
+    Lunula.mail(
       to: "reader@example.com",
       subject: "Welcome",
-      text: "Hello from Hacienda"
+      text: "Hello from Lunula"
     ).deliver
 
-    assert_equal 1, Hacienda.mail_deliveries.length
-    delivered = Hacienda.mail_deliveries.first
+    assert_equal 1, Lunula.mail_deliveries.length
+    delivered = Lunula.mail_deliveries.first
     assert_equal ["reader@example.com"], delivered.to
     assert_equal ["hello@example.test"], delivered.from
     assert_equal "Welcome", delivered.subject
-    assert_includes delivered.body.decoded, "Hello from Hacienda"
+    assert_includes delivered.body.decoded, "Hello from Lunula"
   end
 
   def test_mail_can_generate_multipart_messages
-    message = Hacienda.mail(
+    message = Lunula.mail(
       to: "reader@example.com",
       subject: "Both formats",
       text: "Plain content",
@@ -51,9 +51,9 @@ class MailerTest < Minitest::Test
   end
 
   def test_file_delivery_writes_eml_files
-    Hacienda.configure_mail(root: @root, delivery: :file)
+    Lunula.configure_mail(root: @root, delivery: :file)
 
-    Hacienda.mail(
+    Lunula.mail(
       to: "reader@example.com",
       subject: "Saved",
       text: "Written to disk"
@@ -65,36 +65,36 @@ class MailerTest < Minitest::Test
   end
 
   def test_mail_can_be_delivered_later
-    Hacienda.configure_jobs(adapter: :test)
+    Lunula.configure_jobs(adapter: :test)
 
-    Hacienda.mail(
+    Lunula.mail(
       to: "reader@example.com",
       subject: "Queued",
       text: "Queued mail"
     ).deliver_later
 
-    assert_empty Hacienda.mail_deliveries
-    assert_equal 1, Hacienda.enqueued_jobs.length
+    assert_empty Lunula.mail_deliveries
+    assert_equal 1, Lunula.enqueued_jobs.length
 
-    Hacienda.perform_enqueued_jobs
+    Lunula.perform_enqueued_jobs
 
-    assert_equal 1, Hacienda.mail_deliveries.length
-    assert_equal "Queued", Hacienda.mail_deliveries.first.subject
+    assert_equal 1, Lunula.mail_deliveries.length
+    assert_equal "Queued", Lunula.mail_deliveries.first.subject
   end
 
   def test_unknown_delivery_adapter_raises_a_clear_error
-    Hacienda.configure_mail(delivery: :carrier_pigeon)
+    Lunula.configure_mail(delivery: :carrier_pigeon)
 
-    error = assert_raises(Hacienda::Mailer::Error) do
-      Hacienda.mail(to: "reader@example.com", subject: "Nope", text: "Nope").deliver
+    error = assert_raises(Lunula::Mailer::Error) do
+      Lunula.mail(to: "reader@example.com", subject: "Nope", text: "Nope").deliver
     end
 
     assert_includes error.message, "unknown mail delivery adapter"
   end
 
   def test_development_inbox_lists_and_safely_previews_file_deliveries
-    Hacienda.configure_mail(root: @root, delivery: :file)
-    Hacienda.mail(
+    Lunula.configure_mail(root: @root, delivery: :file)
+    Lunula.mail(
       to: "reader@example.com",
       subject: "Sign in <now>",
       text: "Open http://example.test/magic-login?token=secret",
@@ -102,7 +102,7 @@ class MailerTest < Minitest::Test
     ).deliver
     id = File.basename(Dir[File.join(@root, "tmp", "mail", "*.eml")].fetch(0))
     request = Rack::MockRequest.new(
-      Hacienda::Mailer::Inbox.new(root: @root, environment: "development")
+      Lunula::Mailer::Inbox.new(root: @root, environment: "development")
     )
 
     index = request.get("/", "REMOTE_ADDR" => "127.0.0.1")
@@ -122,7 +122,7 @@ class MailerTest < Minitest::Test
   end
 
   def test_development_inbox_rejects_remote_and_invalid_message_requests
-    inbox = Hacienda::Mailer::Inbox.new(root: @root, environment: "development")
+    inbox = Lunula::Mailer::Inbox.new(root: @root, environment: "development")
     request = Rack::MockRequest.new(inbox)
 
     assert_equal 403, request.get("/", "REMOTE_ADDR" => "203.0.113.10").status
@@ -131,7 +131,7 @@ class MailerTest < Minitest::Test
   end
 
   def test_development_inbox_is_unavailable_in_production
-    inbox = Hacienda::Mailer::Inbox.new(
+    inbox = Lunula::Mailer::Inbox.new(
       root: @root,
       environment: "production",
       authorized: ->(_request) { true }

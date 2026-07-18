@@ -4,7 +4,9 @@ require "json"
 
 module Workouts
   module Repository
-    STORE = Hacienda::Store.new(
+    extend Lunula::Repository
+
+    store(
       database: APP.database,
       table: :workouts,
       record: Workout,
@@ -20,26 +22,8 @@ module Workouts
       }
     )
 
-    module_function
-
-    def all
-      STORE.all(dataset.reverse_order(:created_at))
-    end
-
-    def find(id)
-      STORE.find(id)
-    end
-
-    def save(workout)
-      STORE.save(workout)
-    end
-
-    def delete(workout)
-      STORE.delete(workout)
-    end
-
-    def dataset
-      STORE.dataset
+    def all(scope = dataset.reverse_order(:created_at))
+      super(scope)
     end
   end
 end

@@ -2,7 +2,7 @@
 /*.gem
 /coverage
 /tmp
-/node_modules
+node_modules/
 /playwright-report
 /test-results
 /examples/*/db/*.sqlite3

@@ -1,0 +1,43 @@
+{
+  "name": "@lunula/morpheus",
+  "version": "0.1.0",
+  "description": "HTML-first page navigation with intent prefetching and Idiomorph transitions",
+  "type": "module",
+  "main": "./src/morpheus.js",
+  "exports": {
+    ".": "./src/morpheus.js"
+  },
+  "files": [
+    "src",
+    "LICENSE",
+    "IDIOMORPH-LICENSE.txt",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "jsdom": "^27.0.1",
+    "vitest": "^3.2.4"
+  },
+  "keywords": [
+    "html",
+    "navigation",
+    "prefetch",
+    "idiomorph",
+    "page-transitions"
+  ],
+  "license": "MIT",
+  "sideEffects": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/daz-codes/lunula.git",
+    "directory": "packages/morpheus"
+  }
+}

@@ -22,8 +22,8 @@ sections = snapshots.map do |current_path|
   diff = if previous == current
     "No changes."
   else
-    Tempfile.create(["hacienda-previous", ".snap"]) do |old_file|
-      Tempfile.create(["hacienda-current", ".snap"]) do |new_file|
+    Tempfile.create(["lunula-previous", ".snap"]) do |old_file|
+      Tempfile.create(["lunula-current", ".snap"]) do |new_file|
         old_file.write(previous)
         old_file.flush
         new_file.write(current)

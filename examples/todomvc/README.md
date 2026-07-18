@@ -1,13 +1,13 @@
-# Hacienda TodoMVC
+# Lunula TodoMVC
 
-A server-backed TodoMVC-style example built with Hacienda and a lot of Helium.
+A server-backed TodoMVC-style example built with Lunula and a lot of Helium.
 
 The important point: this is still HTML-first. Every write is a normal form
 submission protected by CSRF. Helium provides progressive enhancement for local
 filtering, counters, edit affordances, keyboard shortcuts, optimistic UI updates,
 draft previews, and small bits of interface state.
 
-Hacienda Navigation handles GET page transitions independently. Helium remains
+Morpheus handles GET page transitions independently. Helium remains
 responsible for the TodoMVC interactions; unchanged directive-bearing nodes
 keep their state across Idiomorph morphs.
 
@@ -15,9 +15,9 @@ keep their state across Idiomorph morphs.
 
 ```sh
 bundle install
-bundle exec hac db:migrate
-bundle exec hac db:seed
-bundle exec hac start
+bundle exec luna db:migrate
+bundle exec luna db:seed
+bundle exec luna start
 ```
 
 Visit `http://localhost:5151`.
@@ -25,7 +25,7 @@ Visit `http://localhost:5151`.
 Open a console with the app loaded:
 
 ```sh
-bundle exec hac console
+bundle exec luna console
 ```
 
 ## Interesting files
@@ -42,7 +42,7 @@ app/domains/todos/
 
 public/assets/
 ├── application.css
-├── hacienda-navigation.js
+├── morpheus.js
 ├── helium-csp.js
 ├── helium.js
 ├── idiomorph.esm.js

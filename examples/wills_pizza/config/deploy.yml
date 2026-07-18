@@ -9,11 +9,11 @@ servers:
   job:
     hosts:
       - 192.0.2.1
-    cmd: bundle exec hac jobs:work
+    cmd: bundle exec luna jobs:work
   scheduler:
     hosts:
       - 192.0.2.1
-    cmd: bundle exec hac jobs:schedule
+    cmd: bundle exec luna jobs:schedule
 
 proxy:
   ssl: true
@@ -32,15 +32,15 @@ registry:
 
 env:
   clear:
-    HACIENDA_ENV: production
+    LUNULA_ENV: production
     RACK_ENV: production
     DATABASE_URL: sqlite:///app/db/production.sqlite3
-    HACIENDA_APP_URL: https://app.example.com
+    LUNULA_APP_URL: https://app.example.com
   secret:
-    - HACIENDA_MASTER_KEY
-    - HACIENDA_SESSION_SECRET
-    # - HACIENDA_SESSION_SECRET_OLD
-    # - HACIENDA_DASHBOARD_PASSWORD
+    - LUNULA_MASTER_KEY
+    - LUNULA_SESSION_SECRET
+    # - LUNULA_SESSION_SECRET_OLD
+    # - LUNULA_DASHBOARD_PASSWORD
     # - SMTP_USERNAME
     # - SMTP_PASSWORD
 
@@ -53,7 +53,7 @@ builder:
   arch: amd64
 
 aliases:
-  console: app exec --primary -i --reuse "bundle exec hac console"
-  migrate: app exec --primary --reuse "bundle exec hac db:migrate"
-  seed: app exec --primary --reuse "bundle exec hac db:seed"
+  console: app exec --primary -i --reuse "bundle exec luna console"
+  migrate: app exec --primary --reuse "bundle exec luna db:migrate"
+  seed: app exec --primary --reuse "bundle exec luna db:seed"
   logs: app logs

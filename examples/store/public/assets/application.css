@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Haçienda Supply — FAC 51 industrial theme (light)
+   Lunula Supply — LUNA 01 industrial theme (light)
    Peter Saville / Ben Kelly inspired: clean white concrete, hazard yellow &
    black diagonal stripes as highlights, heavy industrial type.
    ========================================================================== */
@@ -143,7 +143,7 @@ fieldset { margin: 1rem 0; padding: 0; border: 0; }
 
 /* ---- Page shell -------------------------------------------------------- */
 
-#hacienda-page { width: min(68rem, calc(100% - 2.5rem)); margin: 2.5rem auto; outline: none; }
+#morpheus-page { width: min(68rem, calc(100% - 2.5rem)); margin: 2.5rem auto; outline: none; }
 .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 
 /* ---- Products ---------------------------------------------------------- */

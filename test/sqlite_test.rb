@@ -5,24 +5,24 @@ require "sequel"
 
 class SQLiteTest < Minitest::Test
   def setup
-    @directory = Dir.mktmpdir("hacienda-sqlite")
+    @directory = Dir.mktmpdir("lunula-sqlite")
     @path = File.join(@directory, "production.sqlite3")
     @database = Sequel.sqlite(@path)
   end
 
   def teardown
-    Hacienda::SQLite.busy_monitor = nil
+    Lunula::SQLite.busy_monitor = nil
     @database.disconnect
     FileUtils.rm_rf(@directory)
   end
 
   def test_configure_sets_production_sqlite_pragmas
-    Hacienda::SQLite.configure(@database)
+    Lunula::SQLite.configure(@database)
 
-    assert_equal "wal", Hacienda::SQLite.journal_mode(@database)
-    assert_equal 5_000, Hacienda::SQLite.busy_timeout(@database)
-    assert_equal "NORMAL", Hacienda::SQLite.synchronous_label(@database)
-    assert Hacienda::SQLite.foreign_keys(@database)
+    assert_equal "wal", Lunula::SQLite.journal_mode(@database)
+    assert_equal 5_000, Lunula::SQLite.busy_timeout(@database)
+    assert_equal "NORMAL", Lunula::SQLite.synchronous_label(@database)
+    assert Lunula::SQLite.foreign_keys(@database)
     assert_includes @database.pool.connect_sqls, "PRAGMA busy_timeout = 5000"
     assert_includes @database.pool.connect_sqls, "PRAGMA foreign_keys = ON"
     assert_includes @database.pool.connect_sqls, "PRAGMA journal_mode = WAL"
@@ -30,8 +30,8 @@ class SQLiteTest < Minitest::Test
   end
 
   def test_diagnostics_report_sqlite_health
-    Hacienda::SQLite.configure(@database)
-    diagnostics = Hacienda::SQLite.diagnostics(@database)
+    Lunula::SQLite.configure(@database)
+    diagnostics = Lunula::SQLite.diagnostics(@database)
     by_name = diagnostics.to_h { |check| [check.fetch(:name), check] }
 
     assert_equal "ok", by_name.fetch("adapter").fetch(:status)
@@ -42,11 +42,11 @@ class SQLiteTest < Minitest::Test
   end
 
   def test_checkpoint_reports_sqlite_wal_state
-    Hacienda::SQLite.configure(@database)
+    Lunula::SQLite.configure(@database)
     @database.create_table(:widgets) { primary_key :id }
     @database[:widgets].insert
 
-    result = Hacienda::SQLite.checkpoint(@database, mode: "TRUNCATE")
+    result = Lunula::SQLite.checkpoint(@database, mode: "TRUNCATE")
 
     assert_equal "TRUNCATE", result.fetch(:mode)
     assert_operator result.fetch(:busy), :>=, 0
@@ -57,8 +57,8 @@ class SQLiteTest < Minitest::Test
   def test_busy_error_detects_sqlite_busy_messages
     error = Sequel::DatabaseError.new("SQLite3::BusyException: database is locked")
 
-    assert Hacienda::SQLite.busy_error?(error)
-    refute Hacienda::SQLite.busy_error?(Sequel::DatabaseError.new("no such table: posts"))
+    assert Lunula::SQLite.busy_error?(error)
+    refute Lunula::SQLite.busy_error?(Sequel::DatabaseError.new("no such table: posts"))
   end
 
   def test_busy_monitor_logs_only_after_sustained_contention
@@ -67,7 +67,7 @@ class SQLiteTest < Minitest::Test
     logger = Struct.new(:messages) do
       def warn(message) = messages << message
     end.new(messages)
-    monitor = Hacienda::SQLite::BusyMonitor.new(
+    monitor = Lunula::SQLite::BusyMonitor.new(
       threshold: 2,
       window: 10,
       cooldown: 60,
@@ -89,15 +89,15 @@ class SQLiteTest < Minitest::Test
     assert_equal 1, messages.length
 
     now += 60
-    monitor.report(error, source: "jobs", table: :hacienda_jobs)
-    monitor.report(error, source: "jobs", table: :hacienda_jobs)
+    monitor.report(error, source: "jobs", table: :lunula_jobs)
+    monitor.report(error, source: "jobs", table: :lunula_jobs)
     assert_equal 2, messages.length
     assert_includes messages.last, %(source="jobs")
   end
 
   def test_busy_monitor_ignores_non_busy_database_errors
     messages = []
-    monitor = Hacienda::SQLite::BusyMonitor.new(
+    monitor = Lunula::SQLite::BusyMonitor.new(
       threshold: 1,
       logger: Struct.new(:messages) do
         def warn(message) = messages << message
@@ -110,19 +110,19 @@ class SQLiteTest < Minitest::Test
 
   def test_database_job_adapter_reports_sqlite_busy_errors
     messages = []
-    Hacienda::SQLite.busy_monitor = Hacienda::SQLite::BusyMonitor.new(
+    Lunula::SQLite.busy_monitor = Lunula::SQLite::BusyMonitor.new(
       threshold: 1,
       logger: Struct.new(:messages) do
         def warn(message) = messages << message
       end.new(messages)
     )
-    adapter = Hacienda::Jobs::Adapters::Database.new(database: @database)
+    adapter = Lunula::Jobs::Adapters::Database.new(database: @database)
 
     adapter.__send__(:durable_error, Sequel::DatabaseError.new("SQLite3::BusyException: database is locked"))
 
     assert_equal 1, messages.length
     assert_includes messages.first, "sqlite_busy_contention"
     assert_includes messages.first, %(source="jobs")
-    assert_includes messages.first, %(table="hacienda_jobs")
+    assert_includes messages.first, %(table="lunula_jobs")
   end
 end

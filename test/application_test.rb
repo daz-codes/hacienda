@@ -7,11 +7,11 @@ require "stringio"
 
 class ApplicationTest < Minitest::Test
   def setup
-    @previous_environment = Hacienda.env.to_s
-    @previous_root = Hacienda.root
-    Hacienda.env = "test"
-    Hacienda.configure_logger(output: File::NULL, level: :warn)
-    @root = Dir.mktmpdir("hacienda-app")
+    @previous_environment = Lunula.env.to_s
+    @previous_root = Lunula.root
+    Lunula.env = "test"
+    Lunula.configure_logger(output: File::NULL, level: :warn)
+    @root = Dir.mktmpdir("lunula-app")
     write "app/domains/posts/routes.rb", <<~RUBY
       get "/posts/:id", :show
       get "/posts/new", :new
@@ -28,7 +28,7 @@ class ApplicationTest < Minitest::Test
     RUBY
     write "app/domains/posts/actions.rb", <<~RUBY
       module Posts
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           LAST_MODIFIED = Time.utc(2026, 6, 28, 12, 0, 0)
 
           def show(_context, params)
@@ -119,7 +119,7 @@ class ApplicationTest < Minitest::Test
     write "app/layouts/application.erb", "<%= flash_messages context %><main><%= content %></main>"
     write "app/layouts/custom.erb", "<%= flash_messages context %><article><%= content %></article>"
 
-    @app = Hacienda::Application.new(
+    @app = Lunula::Application.new(
       root: @root,
       layout: "custom",
       reload: true,
@@ -128,12 +128,12 @@ class ApplicationTest < Minitest::Test
   end
 
   def teardown
-    Hacienda::SQLite.busy_monitor = nil
+    Lunula::SQLite.busy_monitor = nil
     @app.loader.unload
     @app.loader.unregister
     FileUtils.rm_rf(@root)
-    Hacienda.root = @previous_root if @previous_root
-    Hacienda.env = @previous_environment
+    Lunula.root = @previous_root if @previous_root
+    Lunula.env = @previous_environment
   end
 
   def test_hash_result_renders_matching_view_with_layout_and_components
@@ -148,14 +148,14 @@ class ApplicationTest < Minitest::Test
   def test_navigation_request_renders_one_page_target_without_the_layout
     response = Rack::MockRequest.new(@app).get(
       "/posts/42",
-      "HTTP_X_HACIENDA_NAVIGATION" => "true"
+      "HTTP_X_LUNULA_NAVIGATION" => "true"
     )
 
     assert_equal 200, response.status
-    assert_equal "morph", response["x-hacienda-navigation"]
-    assert_equal "Post 42", response["x-hacienda-title"]
-    assert_equal "X-Hacienda-Navigation", response["vary"]
-    assert_match(/\A<div id="hacienda-page" data-hacienda-page>/, response.body)
+    assert_equal "morph", response["x-morpheus-navigation"]
+    assert_equal "Post 42", response["x-morpheus-title"]
+    assert_equal "X-Morpheus-Navigation", response["vary"]
+    assert_match(/\A<div id="morpheus-page" data-morpheus-page>/, response.body)
     refute_includes response.body, "<main>"
     assert_includes response.body, "<h1>Explicit Ruby</h1>"
   end
@@ -163,11 +163,11 @@ class ApplicationTest < Minitest::Test
   def test_action_can_force_navigation_to_fall_back_to_a_full_load
     response = Rack::MockRequest.new(@app).get(
       "/full-load",
-      "HTTP_X_HACIENDA_NAVIGATION" => "true"
+      "HTTP_X_LUNULA_NAVIGATION" => "true"
     )
 
     assert_equal 200, response.status
-    assert_equal "reload", response["x-hacienda-navigation"]
+    assert_equal "reload", response["x-morpheus-navigation"]
     assert_includes response.body, "<article>"
   end
 
@@ -212,7 +212,7 @@ class ApplicationTest < Minitest::Test
     write "app/domains/comments/routes.rb", %(get "/comments", :index\n)
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           def index(_context, _params)
             "Inline comments"
           end
@@ -229,7 +229,7 @@ class ApplicationTest < Minitest::Test
     write "app/domains/comments/routes.rb", %(get "/comments", :index\n)
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           def index(_context, _params)
             @calls = @calls.to_i + 1
             @calls.to_s
@@ -247,7 +247,7 @@ class ApplicationTest < Minitest::Test
     write "app/domains/comments/routes.rb", %(get "/comments", :inspect\n)
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           def index(_context, _params) = "Index"
         end
       end
@@ -260,20 +260,20 @@ class ApplicationTest < Minitest::Test
     write "app/domains/comments/routes.rb", %(get "/comments", :render\n)
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           def render(_context, _params) = "Ambiguous"
         end
       end
     RUBY
 
-    error = assert_raises(Hacienda::Error) { @app.reload! }
+    error = assert_raises(Lunula::Error) { @app.reload! }
     assert_includes error.message, "reserved action name :render"
   end
 
   def test_private_reserved_names_fail_during_reload
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           private
 
           def initialize
@@ -282,7 +282,7 @@ class ApplicationTest < Minitest::Test
       end
     RUBY
 
-    error = assert_raises(Hacienda::Error) { @app.reload! }
+    error = assert_raises(Lunula::Error) { @app.reload! }
     assert_includes error.message, "reserved action name :initialize"
   end
 
@@ -293,13 +293,13 @@ class ApplicationTest < Minitest::Test
     RUBY
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
         end
       end
     RUBY
     write "app/domains/comments/actions/moderation_actions.rb", <<~RUBY
       module Comments
-        class ModerationActions < Hacienda::Actions
+        class ModerationActions < Lunula::Actions
           def publish(_context, params) = "Published \#{params[:id]}"
           def archive(_context, params) = "Archived \#{params[:id]}"
         end
@@ -336,7 +336,7 @@ class ApplicationTest < Minitest::Test
 
     Rack::MockRequest.new(@app).get("/posts/1")
 
-    assert_operator Posts::Actions, :<, Hacienda::Actions
+    assert_operator Posts::Actions, :<, Lunula::Actions
   end
 
   def test_reload_replaces_action_sets_and_their_nested_constants
@@ -346,7 +346,7 @@ class ApplicationTest < Minitest::Test
 
     write "app/domains/posts/actions.rb", <<~RUBY
       module Posts
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           FORMAT = "Reloaded"
 
           def show(_context, params)
@@ -384,7 +384,7 @@ class ApplicationTest < Minitest::Test
     RUBY
     write "app/domains/posts/actions.rb", <<~RUBY
       module Posts
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           def greeting(_context, _params) = Presentation.text
         end
       end
@@ -412,7 +412,7 @@ class ApplicationTest < Minitest::Test
     write "app/domains/comments/routes.rb", %(get "/comments", :index\n)
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           def index(_context, _params) = "Comments"
         end
       end
@@ -451,7 +451,7 @@ class ApplicationTest < Minitest::Test
     RUBY
     write "app/domains/posts/actions.rb", <<~RUBY
       module Posts
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           def health(_context, _params)
             "OK"
           end
@@ -477,13 +477,13 @@ class ApplicationTest < Minitest::Test
     write "app/domains/comments/routes.rb", %(get "/posts/:slug", :show\n)
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        class Actions < Hacienda::Actions
+        class Actions < Lunula::Actions
           def show(_context, params) = "Comment \#{params[:slug]}"
         end
       end
     RUBY
 
-    error = assert_raises(Hacienda::Routes::CollisionError) { @app.reload! }
+    error = assert_raises(Lunula::Routes::CollisionError) { @app.reload! }
     assert_includes error.message, "Posts::Actions#show"
     assert_includes error.message, "Comments::Actions#show"
 
@@ -581,7 +581,7 @@ class ApplicationTest < Minitest::Test
   def test_flash_messages_survive_one_redirect
     stack = Rack::Session::Cookie.new(
       @app,
-      key: "hacienda.session",
+      key: "lunula.session",
       secret: "test-session-secret-with-enough-entropy-to-satisfy-rack-session-0000"
     )
     request = Rack::MockRequest.new(stack)
@@ -598,7 +598,7 @@ class ApplicationTest < Minitest::Test
   def test_prefetch_does_not_consume_flash_and_is_not_cached_when_flash_is_present
     stack = Rack::Session::Cookie.new(
       @app,
-      key: "hacienda.session",
+      key: "lunula.session",
       secret: "test-session-secret-with-enough-entropy-to-satisfy-rack-session-0000"
     )
     request = Rack::MockRequest.new(stack)
@@ -607,20 +607,20 @@ class ApplicationTest < Minitest::Test
     prefetch = request.get(
       redirect["location"],
       "HTTP_COOKIE" => redirect["set-cookie"],
-      "HTTP_X_HACIENDA_NAVIGATION" => "true",
-      "HTTP_X_HACIENDA_PREFETCH" => "true"
+      "HTTP_X_LUNULA_NAVIGATION" => "true",
+      "HTTP_X_LUNULA_PREFETCH" => "true"
     )
     navigation = request.get(
       redirect["location"],
       "HTTP_COOKIE" => prefetch["set-cookie"] || redirect["set-cookie"],
-      "HTTP_X_HACIENDA_NAVIGATION" => "true"
+      "HTTP_X_LUNULA_NAVIGATION" => "true"
     )
     consumed = request.get(
       redirect["location"],
       "HTTP_COOKIE" => navigation["set-cookie"]
     )
 
-    assert_equal "no-store", prefetch["x-hacienda-prefetch-cache"]
+    assert_equal "no-store", prefetch["x-morpheus-prefetch-cache"]
     assert_includes prefetch.body, "Post created."
     assert_includes navigation.body, "Post created."
     refute_includes consumed.body, "Post created."
@@ -648,8 +648,8 @@ class ApplicationTest < Minitest::Test
   end
 
   def test_development_errors_show_details
-    Hacienda.env = "development"
-    Hacienda.configure_logger(output: File::NULL, level: :debug)
+    Lunula.env = "development"
+    Lunula.configure_logger(output: File::NULL, level: :debug)
     write "app/errors/500.erb", "<h1>Custom production error</h1>"
 
     response = Rack::MockRequest.new(@app).get("/boom")
@@ -662,7 +662,7 @@ class ApplicationTest < Minitest::Test
 
   def test_sqlite_busy_request_errors_are_reported_to_the_busy_monitor
     messages = []
-    Hacienda::SQLite.busy_monitor = Hacienda::SQLite::BusyMonitor.new(
+    Lunula::SQLite.busy_monitor = Lunula::SQLite::BusyMonitor.new(
       threshold: 1,
       logger: Struct.new(:messages) do
         def warn(message) = messages << message
@@ -680,8 +680,8 @@ class ApplicationTest < Minitest::Test
   end
 
   def test_production_errors_hide_details
-    Hacienda.env = "production"
-    Hacienda.configure_logger(output: File::NULL, level: :info)
+    Lunula.env = "production"
+    Lunula.configure_logger(output: File::NULL, level: :info)
 
     response = Rack::MockRequest.new(@app).get("/boom")
 
@@ -691,8 +691,8 @@ class ApplicationTest < Minitest::Test
   end
 
   def test_custom_production_error_page_uses_application_layout
-    Hacienda.env = "production"
-    Hacienda.configure_logger(output: File::NULL, level: :info)
+    Lunula.env = "production"
+    Lunula.configure_logger(output: File::NULL, level: :info)
     write "app/errors/500.erb", <<~ERB
       <% page_title title %>
       <h1>Custom <%= status %></h1>
@@ -712,8 +712,8 @@ class ApplicationTest < Minitest::Test
 
   def test_request_logger_filters_sensitive_params
     output = StringIO.new
-    Hacienda.configure_logger(output: output, level: :info)
-    stack = Hacienda::Middleware::RequestLogger.new(@app)
+    Lunula.configure_logger(output: output, level: :info)
+    stack = Lunula::Middleware::RequestLogger.new(@app)
 
     Rack::MockRequest.new(stack).post("/posts", params: {
       title: "Visible",
@@ -731,8 +731,8 @@ class ApplicationTest < Minitest::Test
 
   def test_request_logger_filters_json_params
     output = StringIO.new
-    Hacienda.configure_logger(output: output, level: :info)
-    stack = Hacienda::Middleware::RequestLogger.new(@app)
+    Lunula.configure_logger(output: output, level: :info)
+    stack = Lunula::Middleware::RequestLogger.new(@app)
 
     Rack::MockRequest.new(stack).post(
       "/echo/1",

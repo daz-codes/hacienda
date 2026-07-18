@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><%= document_title %></title>
     <%= stylesheet_link "application.css" %>
-    <%= hacienda_navigation context %>
+    <%= morpheus_navigation context %>
     <%= javascript_include "helium-csp.js", module: true %>
   </head>
   <body>
     <header class="site-header">
       <a class="brand" href="/pizzas"><span>Will's</span> Pizza</a>
       <nav aria-label="Main navigation">
-        <%= link "Menu", "/pizzas", data_hacienda_active_prefix: "/pizzas" %>
-        <%= link "Venues", "/franchises", data_hacienda_active_prefix: "/franchises" %>
-        <%= link "Order", "/orders/new", data_hacienda_active_prefix: "/orders" %>
+        <%= link "Menu", "/pizzas", data_lunula_active_prefix: "/pizzas" %>
+        <%= link "Venues", "/franchises", data_lunula_active_prefix: "/franchises" %>
+        <%= link "Order", "/orders/new", data_lunula_active_prefix: "/orders" %>
         <% if context.current_user %>
           <%= link "Add pizza", "/pizzas/new" %>
           <%= button_to "Log out", "/logout", method: "delete", context: %>
@@ -26,7 +26,7 @@
     <%= navigation_page content, context: context %>
     <footer class="site-footer">
       <strong>Will's Pizza</strong>
-      <span>Built with Hacienda and plain Ruby.</span>
+      <span>Built with Lunula and plain Ruby.</span>
     </footer>
   </body>
 </html>

@@ -3,7 +3,7 @@
 module Posts
   class CoverUpload
     CONTENT_TYPES = %w[image/jpeg image/png image/webp image/avif].freeze
-    CONTENT_INSPECTOR = Hacienda::Storage::ContentTypeInspector.new
+    CONTENT_INSPECTOR = Lunula::Storage::ContentTypeInspector.new
 
     def initialize(storage:, upload:, post:)
       @storage = storage
@@ -12,7 +12,7 @@ module Posts
     end
 
     def attach
-      return self unless Hacienda::Storage::Upload.present?(@upload)
+      return self unless Lunula::Storage::Upload.present?(@upload)
 
       @blob = @storage.store(
         @upload,
@@ -23,7 +23,7 @@ module Posts
       )
       @post.attach_cover(@blob)
       self
-    rescue Hacienda::Storage::InvalidUpload => error
+    rescue Lunula::Storage::InvalidUpload => error
       @post.errors.add(:cover, error.message)
       self
     end

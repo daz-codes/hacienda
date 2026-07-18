@@ -4,8 +4,8 @@ require_relative "test_helper"
 
 class RoutesTest < Minitest::Test
   def setup
-    @root = Dir.mktmpdir("hacienda-routes")
-    @routes = Hacienda::Routes.new
+    @root = Dir.mktmpdir("lunula-routes")
+    @routes = Lunula::Routes.new
   end
 
   def teardown
@@ -15,7 +15,7 @@ class RoutesTest < Minitest::Test
   def test_rejects_normalized_duplicates_across_domains
     draw("pizzas", %(get "/pizzas/", :index\n))
 
-    error = assert_raises(Hacienda::Routes::CollisionError) do
+    error = assert_raises(Lunula::Routes::CollisionError) do
       draw("menu", %(get "//pizzas", :index\n))
     end
 
@@ -26,7 +26,7 @@ class RoutesTest < Minitest::Test
   def test_rejects_structurally_equivalent_dynamic_routes
     draw("pizzas", %(get "/pizzas/:id", :show\n))
 
-    error = assert_raises(Hacienda::Routes::CollisionError) do
+    error = assert_raises(Lunula::Routes::CollisionError) do
       draw("menu", %(get "/pizzas/:slug", :show\n))
     end
 
@@ -37,7 +37,7 @@ class RoutesTest < Minitest::Test
   def test_rejects_same_specificity_patterns_with_a_shared_concrete_path
     draw("sections", %(get "/:section/new", :new\n))
 
-    error = assert_raises(Hacienda::Routes::CollisionError) do
+    error = assert_raises(Lunula::Routes::CollisionError) do
       draw("pizzas", %(get "/pizzas/:id", :show\n))
     end
 
@@ -79,7 +79,7 @@ class RoutesTest < Minitest::Test
       get "/pizzas/:id", :show
     RUBY
 
-    error = assert_raises(Hacienda::Routes::CollisionError) do
+    error = assert_raises(Lunula::Routes::CollisionError) do
       draw("admin", <<~RUBY)
         guard String do
           get "/pizzas/:slug", :edit, actions: :management

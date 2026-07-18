@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Guides
-  class PreviewActions < Hacienda::Actions
+  class PreviewActions < Lunula::Actions
     def title_preview(_context, params)
       response Preview.title(params[:title])
     end

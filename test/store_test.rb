@@ -5,7 +5,7 @@ require "json"
 require "sequel"
 
 class StoreArticle
-  include Hacienda::Attributes
+  include Lunula::Attributes
 
   attributes :id, :body, :created_at, :updated_at
   attribute :title, default: ""
@@ -15,9 +15,9 @@ end
 
 class AttributesTest < Minitest::Test
   def test_declares_accessors_defaults_casts_and_full_attributes
-    article = StoreArticle.new(title: "Hacienda", lock_version: "2")
+    article = StoreArticle.new(title: "Lunula", lock_version: "2")
 
-    assert_equal "Hacienda", article.title
+    assert_equal "Lunula", article.title
     assert_equal 2, article.lock_version
     assert_equal({}, article.metadata)
     assert_equal StoreArticle.attribute_definitions.keys, article.attributes.keys
@@ -64,7 +64,7 @@ class StoreTest < Minitest::Test
       Integer :lock_version, null: false, default: 0
     end
     @now = Time.utc(2026, 6, 28, 12, 0, 0)
-    @store = Hacienda::Store.new(
+    @store = Lunula::Store.new(
       database: @database,
       table: :articles,
       record: StoreArticle,
@@ -179,7 +179,7 @@ class StoreTest < Minitest::Test
     @store.save(first)
     stale.title = "Second writer"
 
-    error = assert_raises(Hacienda::Store::StaleObject) { @store.save(stale) }
+    error = assert_raises(Lunula::Store::StaleObject) { @store.save(stale) }
 
     assert_includes error.message, "StoreArticle"
     assert_equal "First writer", @store.find(article.id).title

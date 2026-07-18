@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class ValidationsTest < Minitest::Test
   class Post
-    include Hacienda::Validations
+    include Lunula::Validations
 
     attr_accessor :title
 
@@ -18,7 +18,7 @@ class ValidationsTest < Minitest::Test
   end
 
   class Account
-    include Hacienda::Validations
+    include Lunula::Validations
 
     def validate(password:)
       errors.add :password, "must be at least 12 characters" if password.length < 12
@@ -26,7 +26,7 @@ class ValidationsTest < Minitest::Test
   end
 
   class Legacy
-    include Hacienda::Validations
+    include Lunula::Validations
 
     def validate
       ["Name is required"]
@@ -34,7 +34,7 @@ class ValidationsTest < Minitest::Test
   end
 
   class MixedStyle
-    include Hacienda::Validations
+    include Lunula::Validations
 
     def validate
       errors.add :name, "is required"
@@ -43,7 +43,7 @@ class ValidationsTest < Minitest::Test
   end
 
   class AccidentalHash
-    include Hacienda::Validations
+    include Lunula::Validations
 
     def validate
       {checked: true}

@@ -7,7 +7,7 @@ module Guides
     def title(value)
       title = value.to_s.strip
       title = "Untitled record" if title.empty?
-      %(<h3 id="record-title">#{Hacienda::HTML.escape(title)}</h3>)
+      %(<h3 id="record-title">#{Lunula::HTML.escape(title)}</h3>)
     end
 
     def comment(value)
@@ -34,7 +34,7 @@ module Guides
               @text="time_ago_in_words(timestamp - #{created_at.to_f})"
             >Just now</time>
           </span>
-          <p>#{Hacienda::HTML.escape(content)}</p>
+          <p>#{Lunula::HTML.escape(content)}</p>
         </#{tag}>
       HTML
     end

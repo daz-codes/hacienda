@@ -1,0 +1,33 @@
+# frozen_string_literal: true
+
+require_relative "lib/lunula/version"
+
+Gem::Specification.new do |spec|
+  spec.name = "lunula"
+  spec.version = Lunula::VERSION
+  spec.authors = ["Lunula contributors"]
+  spec.summary = "A lightweight, domain-oriented Ruby web framework"
+  spec.description = "Explicit Rack applications organized around business domains."
+  spec.homepage = "https://github.com/daz-codes/lunula"
+  spec.license = "MIT"
+  spec.required_ruby_version = ">= 3.2"
+
+  spec.files = Dir["lib/**/*", "exe/*", "docs/**/*", "CHANGELOG.md", "README.md", "SECURITY.md", "LICENSE.txt"]
+  spec.bindir = "exe"
+  spec.executables = %w[luna]
+  spec.require_paths = ["lib"]
+  spec.metadata = {
+    "bug_tracker_uri" => "https://github.com/daz-codes/lunula/issues",
+    "changelog_uri" => "https://github.com/daz-codes/lunula/blob/main/CHANGELOG.md",
+    "documentation_uri" => "https://github.com/daz-codes/lunula/tree/main/docs",
+    "rubygems_mfa_required" => "true",
+    "source_code_uri" => "https://github.com/daz-codes/lunula"
+  }
+
+  spec.add_dependency "mail", ">= 2.8", "< 3"
+  spec.add_dependency "rack", ">= 3.1", "< 4"
+  spec.add_dependency "rack-session", ">= 2.1", "< 3"
+  spec.add_dependency "rackup", ">= 2.2", "< 3"
+  spec.add_dependency "sequel", ">= 5.80", "< 6"
+  spec.add_dependency "zeitwerk", ">= 2.7", "< 3"
+end

@@ -2,8 +2,8 @@
 
 module Products
   class Subscriber
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
 
     attributes :id, :product_id, :created_at, :updated_at
     attribute :email, default: ""

@@ -73,6 +73,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run client tests
         run: npm run test:client
+      - name: Verify Morpheus package and vendored assets
+        run: npm run test:package
       - name: Run browser smoke tests
         run: npm run test:browser
       - name: Verify tests left the checkout clean
@@ -88,18 +90,18 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_DB: hacienda_test
+          POSTGRES_DB: lunula_test
           POSTGRES_PASSWORD: postgres
           POSTGRES_USER: postgres
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d hacienda_test"
+          --health-cmd "pg_isready -U postgres -d lunula_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     env:
-      POSTGRES_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hacienda_test
+      POSTGRES_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/lunula_test
     steps:
       - uses: actions/checkout@v6
       - uses: ruby/setup-ruby@v1
@@ -131,7 +133,7 @@ jobs:
         id: previous
         shell: bash
         run: |
-          version="$(bundle exec ruby -Ilib -e 'require "hacienda/version"; print Hacienda::VERSION')"
+          version="$(bundle exec ruby -Ilib -e 'require "lunula/version"; print Lunula::VERSION')"
           previous="$(git tag --merged HEAD --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+\.rc[0-9]+$' | grep -v "^v${version}$" | head -n 1 || true)"
           echo "ref=${previous}" >> "$GITHUB_OUTPUT"
       - name: Generate upgrade diff

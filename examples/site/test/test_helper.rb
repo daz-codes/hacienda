@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-ENV["HACIENDA_ENV"] = "test"
+ENV["LUNULA_ENV"] = "test"
 ENV["RACK_ENV"] = "test"
 
 require "minitest/autorun"

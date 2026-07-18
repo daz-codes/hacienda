@@ -1,21 +1,21 @@
-# Getting Started with Hacienda
+# Getting Started with Lunula
 
-This tutorial builds **Hacienda Supply**, a small product store with inventory,
+This tutorial builds **Lunula Supply**, a small product store with inventory,
 authentication, image uploads, stock notifications, email, caching, tests, and
 deployment configuration.
 
 It deliberately follows the shape of the current
 [Rails 8.1 Getting Started guide](https://guides.rubyonrails.org/getting_started.html),
-but translates each feature into Hacienda’s domain-oriented architecture. The
+but translates each feature into Lunula’s domain-oriented architecture. The
 completed application is in [`examples/store`](../examples/store).
 
-Callouts marked **Hacienda difference** explain intentional design choices.
+Callouts marked **Lunula difference** explain intentional design choices.
 Callouts marked **Current gap** identify something the Rails guide can do that
-Hacienda cannot currently provide.
+Lunula cannot currently provide.
 
 ## 1. Prerequisites
 
-You need Ruby 3.2 or newer, Bundler, SQLite, and Hacienda’s `hac` executable.
+You need Ruby 3.2 or newer, Bundler, SQLite, and Lunula’s `luna` executable.
 When working from this repository, Ruby 3.3.6 can be selected explicitly:
 
 ```sh
@@ -25,26 +25,26 @@ mise exec ruby@3.3.6 -- ruby --version
 Create the application:
 
 ```sh
-hac new store
+luna new store
 cd store
 bundle install
 ```
 
-`hac new` creates a Rack application, SQLite configuration, encrypted
+`luna new` creates a Rack application, SQLite configuration, encrypted
 credentials, CSRF/session middleware, ERB layout, static assets, Helium,
-Hacienda Navigation, tests, Docker, and Kamal configuration.
+Morpheus, tests, Docker, and Kamal configuration.
 
 Start it with:
 
 ```sh
-bundle exec hac db:migrate
-bundle exec hac start
+bundle exec luna db:migrate
+bundle exec luna start
 ```
 
-Open <http://localhost:5151>. Hacienda uses port 5151 by default.
+Open <http://localhost:5151>. Lunula uses port 5151 by default.
 
-> **Hacienda difference:** Rails organizes generated code into models,
-> controllers, views, jobs, and mailers. Hacienda puts application behavior
+> **Lunula difference:** Rails organizes generated code into models,
+> controllers, views, jobs, and mailers. Lunula puts application behavior
 > under `app/domains/<domain>` and keeps infrastructure in `config`.
 
 ## 2. Application structure
@@ -88,13 +88,13 @@ require a server restart.
 Generate explicit REST code:
 
 ```sh
-bundle exec hac generate rest products
+bundle exec luna generate rest products
 ```
 
 This writes seven route declarations, seven methods on `Products::Actions`, ERB
 templates, a plain Ruby product object, a repository, and a migration. Larger
 groups can be generated into a separate action set with
-`hac generate action products publish --actions publishing`.
+`luna generate action products publish --actions publishing`.
 
 The generated routes are ordinary code:
 
@@ -108,7 +108,7 @@ patch "/products/:id", :update
 delete "/products/:id", :destroy
 ```
 
-> **Hacienda difference:** There is intentionally no `resources :products`
+> **Lunula difference:** There is intentionally no `resources :products`
 > macro. The generator saves typing once; the resulting routes remain visible.
 
 The REST generator starts with generic `title` and `body` fields. Change its
@@ -136,21 +136,21 @@ end
 Apply it:
 
 ```sh
-bundle exec hac db:migrate
+bundle exec luna db:migrate
 ```
 
-> **Hacienda difference:** Sequel migrations are explicit Ruby. Hacienda does
+> **Lunula difference:** Sequel migrations are explicit Ruby. Lunula does
 > not infer a domain object from the table schema.
 
 ## 4. The product domain object
 
-`Products::Product` is a plain Ruby object using two optional Hacienda mixins:
+`Products::Product` is a plain Ruby object using two optional Lunula mixins:
 
 ```ruby
 module Products
   class Product
-    include Hacienda::Attributes
-    include Hacienda::Validations
+    include Lunula::Attributes
+    include Lunula::Validations
     include Imageable
     include InventoryNotifications
 
@@ -183,39 +183,23 @@ Persistence belongs to the repository:
 ```ruby
 module Products
   module Repository
-    STORE = Hacienda::Store.new(
+    extend Lunula::Repository
+
+    store(
       database: APP.database,
       table: :products,
       record: Product
     )
 
-    module_function
-
-    def all
-      STORE.all(dataset.order(:name))
-    end
-
-    def find(id)
-      STORE.find(id)
-    end
-
-    def save(product)
-      STORE.save(product)
-    end
-
-    def delete(product)
-      STORE.delete(product)
-    end
-
-    def dataset
-      STORE.dataset
+    def all(scope = dataset.order(:name))
+      super(scope)
     end
   end
 end
 ```
 
-> **Hacienda difference:** Rails’ Active Record object combines schema mapping,
-> queries, persistence, associations, callbacks, and validation. Hacienda keeps
+> **Lunula difference:** Rails’ Active Record object combines schema mapping,
+> queries, persistence, associations, callbacks, and validation. Lunula keeps
 > the domain object and repository separate. This is more code, but every query
 > and write boundary remains explicit.
 
@@ -224,7 +208,7 @@ end
 Open an application console:
 
 ```sh
-bundle exec hac console
+bundle exec luna console
 ```
 
 Create and query products using domain and repository methods:
@@ -250,10 +234,13 @@ For custom queries, use the exposed Sequel dataset and preserve row mapping:
 
 ```ruby
 scope = Products::Repository.dataset.where(inventory_count: 0)
-Products::Repository::STORE.all(scope)
+Products::Repository.all(scope)
 ```
 
-> **Current gap:** Hacienda has no association DSL equivalent to `has_many` or
+`find` and `find_by!` raise `Lunula::NotFound`; use `first` or `find_by`
+when a missing row is an expected result.
+
+> **Current gap:** Lunula has no association DSL equivalent to `has_many` or
 > `belongs_to`. Related queries are named repository methods. This is deliberate
 > today, but it is less concise for association-heavy domains.
 
@@ -271,7 +258,7 @@ get "/products/:id", :show
 
 ```ruby
 module Products
-  class Actions < Hacienda::Actions
+  class Actions < Lunula::Actions
     def index(_context, _params)
       {products: Repository.all}
     end
@@ -281,16 +268,16 @@ end
 
 The declaration belongs in `app/domains/products/routes.rb`. Its location owns
 the route, fixes the `Products` action namespace, and keeps the public request
-surface beside the behavior it exposes. Hacienda does not load a global
+surface beside the behavior it exposes. Lunula does not load a global
 business-route file. Rack middleware and infrastructure mounts belong in
 `config.ru`, so there is only one normal home for application routes.
 
 Inspect ownership or trace a concrete request with:
 
 ```sh
-bundle exec hac routes --domain products
-bundle exec hac routes GET /products/42
-bundle exec hac routes /products/42
+bundle exec luna routes --domain products
+bundle exec luna routes GET /products/42
+bundle exec luna routes /products/42
 ```
 
 The final form reports the selected route for every matching HTTP verb. Boot and
@@ -314,7 +301,7 @@ ERB output is escaped automatically. Components are partials, not classes.
 
 ## 7. Forms, permitted parameters, and CRUD
 
-The shared form uses plain HTML and explicit Hacienda helpers:
+The shared form uses plain HTML and explicit Lunula helpers:
 
 ```erb
 <%= error_messages errors %>
@@ -365,7 +352,7 @@ The update action loads the existing object, assigns permitted values, validates
 and saves it. The destroy action explicitly deletes dependent subscribers before
 deleting the product.
 
-> **Hacienda difference:** Hacienda has no model-aware form builder. Form URLs,
+> **Lunula difference:** Lunula has no model-aware form builder. Form URLs,
 > field names, and button labels stay visible. `Params#permit` provides the
 > whitelisting boundary without coupling parameters to persistence.
 
@@ -374,9 +361,9 @@ deleting the product.
 Generate authentication:
 
 ```sh
-bundle exec hac generate auth
+bundle exec luna generate auth
 bundle install
-bundle exec hac db:migrate
+bundle exec luna db:migrate
 ```
 
 This generates sign-up, login, logout, magic-link login, email verification,
@@ -401,7 +388,7 @@ end
 The generated application config loads the user once per request:
 
 ```ruby
-APP = Hacienda::Application.new(
+APP = Lunula::Application.new(
   root: APP_ROOT,
   database: DB,
   context_loaders: ["Auth::LoadCurrentUser"]
@@ -410,7 +397,7 @@ APP = Hacienda::Application.new(
 
 Views can use `context.current_user` to show management controls.
 
-> **Hacienda difference:** Guards replace controller-wide authentication
+> **Lunula difference:** Guards replace controller-wide authentication
 > callbacks. Public and protected HTTP boundaries are visible together in the
 > domain route file.
 
@@ -436,7 +423,7 @@ The product key includes `updated_at`, so saving the product naturally selects
 a new cache entry. Development, test, and this single-host example use the
 bounded memory cache.
 
-> **Hacienda difference:** Hacienda does not calculate template digests or use
+> **Lunula difference:** Lunula does not calculate template digests or use
 > Solid Cache. Cache keys and expiry are explicit, and the default memory cache
 > is process-local.
 
@@ -449,7 +436,7 @@ line breaks:
 .product-description { white-space: pre-wrap; }
 ```
 
-> **Current gap — rich text:** Hacienda has no Action Text equivalent, rich-text
+> **Current gap — rich text:** Lunula has no Action Text equivalent, rich-text
 > editor, embedded attachment handling, or rich-text sanitization pipeline.
 > Applications currently choose their own Markdown or editor integration. This
 > tutorial intentionally stays with safe plain text.
@@ -471,7 +458,7 @@ blob = context.storage.store(
   prefix: "product-images",
   max_bytes: 5 * 1024 * 1024,
   content_types: ["image/jpeg", "image/png", "image/webp", "image/avif"],
-  content_inspector: Hacienda::Storage::ContentTypeInspector.new
+  content_inspector: Lunula::Storage::ContentTypeInspector.new
 )
 product.attach_featured_image(blob)
 ```
@@ -486,7 +473,7 @@ view asks the configured storage service for its URL:
 Development uses local disk, tests use memory, and this example mounts a
 persistent disk volume in production.
 
-> **Current gap — attachment ecosystem:** Hacienda Storage covers validated
+> **Current gap — attachment ecosystem:** Lunula Storage covers validated
 > upload, local serving, and pluggable services. It does not yet provide image
 > variants, metadata analysis jobs, direct browser-to-cloud uploads, or a built-in
 > S3 service comparable to the wider Active Storage feature set.
@@ -494,9 +481,9 @@ persistent disk volume in production.
 ## 12. Internationalization
 
 The Rails guide translates the product heading and selects locale from a query
-parameter. The Hacienda example leaves its English labels inline.
+parameter. The Lunula example leaves its English labels inline.
 
-> **Current gap — i18n:** Hacienda does not yet integrate the Ruby `i18n` gem or
+> **Current gap — i18n:** Lunula does not yet integrate the Ruby `i18n` gem or
 > provide `t`/`translate` helpers and request-scoped locale handling. This is an
 > explicit roadmap item. Applications can wire the gem themselves, but there is
 > not yet a framework convention worth teaching as the default.
@@ -506,7 +493,7 @@ parameter. The Hacienda example leaves its English labels inline.
 Create a subscribers migration:
 
 ```sh
-bundle exec hac generate migration create_subscribers
+bundle exec luna generate migration create_subscribers
 ```
 
 ```ruby
@@ -525,11 +512,11 @@ The `Subscriber` object declares attributes and validation. The
 
 ```ruby
 def for_product(product)
-  STORE.all(dataset.where(product_id: product.id).order(:created_at))
+  all(dataset.where(product_id: product.id).order(:created_at))
 end
 
 def find_by_email(product, email)
-  STORE.first(dataset.where(product_id: product.id, email: normalize(email)))
+  find_by(product_id: product.id, email: normalize(email))
 end
 ```
 
@@ -539,7 +526,7 @@ The public nested route remains explicit:
 post "/products/:id/subscribers", :subscribe
 ```
 
-> **Hacienda difference:** There is no generated association collection such as
+> **Lunula difference:** There is no generated association collection such as
 > `product.subscribers`. `Subscribers.for_product(product)` states the query and
 > ownership directly.
 
@@ -591,23 +578,23 @@ def call(event)
 end
 ```
 
-Production stores the event in Hacienda’s transactional outbox. `hac jobs:work`
+Production stores the event in Lunula’s transactional outbox. `luna jobs:work`
 delivers the event and durable mail jobs with at-least-once semantics.
 
-> **Hacienda difference:** Rails demonstrates an `after_update_commit` callback.
-> Hacienda makes the transaction and event explicit in the action. Required
+> **Lunula difference:** Rails demonstrates an `after_update_commit` callback.
+> Lunula makes the transaction and event explicit in the action. Required
 > business invariants remain direct calls; eventual side effects become
 > idempotent event subscribers.
 
 ## 15. Mail and unsubscribe links
 
-Hacienda mail is a function, not an inherited mailer class:
+Lunula mail is a function, not an inherited mailer class:
 
 ```ruby
-product_url = Hacienda.app_url("/products/#{product.id}")
-unsubscribe_url = Hacienda.app_url("/unsubscribe?#{Rack::Utils.build_query(token: unsubscribe_token(subscriber))}")
+product_url = Lunula.app_url("/products/#{product.id}")
+unsubscribe_url = Lunula.app_url("/unsubscribe?#{Rack::Utils.build_query(token: unsubscribe_token(subscriber))}")
 
-Hacienda.mail(
+Lunula.mail(
   to: subscriber.email,
   subject: "#{product.name} is back in stock",
   text: "Good news! #{product_url}\n\nUnsubscribe: #{unsubscribe_url}",
@@ -617,14 +604,14 @@ Hacienda.mail(
 
 Development writes `.eml` files to `tmp/mail`; tests collect deliveries in
 memory; production uses SMTP and durable database jobs. During development,
-open `/hac/mail` to inspect delivered messages and follow verification, reset,
+open `/luna/mail` to inspect delivered messages and follow verification, reset,
 or magic-login links. HTML messages render in a restricted sandbox and remote
 resources are disabled.
 
 Generate an expiring signed unsubscribe token:
 
 ```ruby
-Hacienda.signed_token.generate(
+Lunula.signed_token.generate(
   {subscriber_id: subscriber.id, email: subscriber.email},
   purpose: "product_unsubscribe",
   expires_in: 30 * 24 * 60 * 60
@@ -642,7 +629,7 @@ post "/unsubscribe", :confirm_unsubscribe
 GET renders a confirmation page. POST verifies the token again, includes CSRF
 protection, and deletes the subscription.
 
-> **Hacienda difference:** This is an intentional security divergence, not a
+> **Lunula difference:** This is an intentional security divergence, not a
 > missing capability. Link scanners and prefetchers can issue GET requests, so
 > GET should not consume a token or mutate subscription state.
 
@@ -652,12 +639,13 @@ Static files live in `public/assets` and are included explicitly:
 
 ```erb
 <%= stylesheet_link "application.css" %>
-<%= hacienda_navigation context %>
+<%= morpheus_navigation context %>
 <%= javascript_include "helium-csp.js", module: true %>
 <%= javascript_include "store.js", defer: true %>
 ```
 
-Hacienda Navigation prefetches and morphs same-origin GET pages with Idiomorph.
+Morpheus, vendored from the `@lunula/morpheus` package, prefetches and morphs
+same-origin GET pages with Idiomorph.
 Helium progressively enhances local interface behavior. The product form uses
 `@bind` and `@text` for live inventory feedback while remaining a normal HTML
 form.
@@ -671,14 +659,14 @@ document.addEventListener("submit", (event) => {
 });
 ```
 
-> **Hacienda difference:** Hacienda fingerprints static assets, rewrites local
+> **Lunula difference:** Lunula fingerprints static assets, rewrites local
 > CSS and JavaScript dependencies, and generates a production manifest without
 > Node.js. It deliberately does not bundle, transpile, or compile source tools
 > such as Tailwind; those tools write their output into `public/assets` before
-> `hac assets:precompile` fingerprints it.
+> `luna assets:precompile` fingerprints it.
 
-> **Hacienda difference:** Native POST/PATCH/DELETE forms perform full browser
-> submissions. Navigation only accelerates GET transitions; Hacienda does not
+> **Lunula difference:** Native POST/PATCH/DELETE forms perform full browser
+> submissions. Navigation only accelerates GET transitions; Lunula does not
 > reproduce Turbo Frames or Turbo Streams. Helium enhances individual moving
 > parts without becoming the navigation system.
 
@@ -706,7 +694,7 @@ Cross-domain workflows, such as authentication followed by purchasing and mail
 delivery, belong in `test/integration`. Name those files after the customer
 story rather than after a single implementation class.
 
-`hac generate domain` creates the mirrored directory. Action generation adds a
+`luna generate domain` creates the mirrored directory. Action generation adds a
 direct action contract, REST generation adds object, repository, and HTTP action
 tests, and authentication generation adds user-policy and signup contracts.
 Each generated assertion describes behavior that can be retained and extended.
@@ -736,8 +724,8 @@ patch "/products/#{product.id}", {
   inventory_count: "5"
 }
 
-assert_equal 1, Hacienda.mail_deliveries.length
-assert_equal ["listener@example.com"], Hacienda.mail_deliveries.first.to
+assert_equal 1, Lunula.mail_deliveries.length
+assert_equal ["listener@example.com"], Lunula.mail_deliveries.first.to
 ```
 
 Run the suite:
@@ -746,7 +734,7 @@ Run the suite:
 bundle exec rake test
 ```
 
-> **Current gap — fixtures:** Hacienda does not generate or load named fixture
+> **Current gap — fixtures:** Lunula does not generate or load named fixture
 > files. Tests use factories, helper methods, or direct domain/repository calls.
 > The tradeoff is less implicit test data but more setup code.
 
@@ -755,7 +743,7 @@ bundle exec rake test
 The application includes a small GitHub Actions workflow that installs Ruby and
 runs `bundle exec rake test`.
 
-> **Current gap — generated tooling:** Hacienda does not currently generate a
+> **Current gap — generated tooling:** Lunula does not currently generate a
 > RuboCop configuration, a framework-aware static security scanner equivalent to
 > Brakeman, or CI workflow files. Generic RuboCop, dependency auditing, and
 > GitHub Actions can be added normally; the completed example includes CI to show
@@ -767,7 +755,7 @@ encrypted credentials, rate-limiting hooks, and signed tokens.
 
 ## 19. Deployment and durable jobs
 
-`hac new` generates a production Dockerfile, Kamal configuration, encrypted
+`luna new` generates a production Dockerfile, Kamal configuration, encrypted
 credentials support, HTTPS proxy settings, health check, migration aliases, and
 a separate durable worker role.
 
@@ -780,11 +768,11 @@ servers:
   job:
     hosts:
       - 192.0.2.1
-    cmd: bundle exec hac jobs:work
+    cmd: bundle exec luna jobs:work
 
 env:
   clear:
-    HACIENDA_APP_URL: https://app.example.com
+    LUNULA_APP_URL: https://app.example.com
 
 volumes:
   - "store_db:/app/db"
@@ -803,33 +791,33 @@ The database worker handles SIGTERM gracefully, retries failures with backoff,
 reclaims expired leases, and exposes failures through:
 
 ```sh
-bundle exec hac jobs:failed
-bundle exec hac jobs:scheduled
-bundle exec hac jobs:cancel 42
-bundle exec hac jobs:retry job 42
-bundle exec hac jobs:retry handoff 9
-bundle exec hac jobs:retry event 17
+bundle exec luna jobs:failed
+bundle exec luna jobs:scheduled
+bundle exec luna jobs:cancel 42
+bundle exec luna jobs:retry job 42
+bundle exec luna jobs:retry handoff 9
+bundle exec luna jobs:retry event 17
 ```
 
 For heavier workloads, configure a worker pool and multiple queues explicitly:
 
 ```sh
-bundle exec hac jobs:work --queue critical,default --threads 4 --batch-size 20
-bundle exec hac jobs:work --all-queues --threads 4 --batch-size 20
-bundle exec hac jobs:health
-bundle exec hac jobs:benchmark --jobs 1000 --threads 2 --batch-size 10
+bundle exec luna jobs:work --queue critical,default --threads 4 --batch-size 20
+bundle exec luna jobs:work --all-queues --threads 4 --batch-size 20
+bundle exec luna jobs:health
+bundle exec luna jobs:benchmark --jobs 1000 --threads 2 --batch-size 10
 ```
 
 Named queues are served fairly in their declared cycle; `--all-queues` uses
 global priority ordering. Workers claim batches atomically, finish their current
 batch during graceful shutdown, and publish identity, heartbeat, queue, thread,
-batch, and workload information to `hacienda_job_workers`.
+batch, and workload information to `lunula_job_workers`.
 
 Running jobs renew their leases. If a worker is killed, a replacement can use
 the expired worker heartbeat to reclaim its jobs before the longer lease expiry.
-Configure defaults through `HACIENDA_JOB_LEASE_SECONDS`,
-`HACIENDA_JOB_HEARTBEAT_INTERVAL`, `HACIENDA_JOB_TIMEOUT`, and
-`HACIENDA_JOB_WORKER_TIMEOUT`.
+Configure defaults through `LUNULA_JOB_LEASE_SECONDS`,
+`LUNULA_JOB_HEARTBEAT_INTERVAL`, `LUNULA_JOB_TIMEOUT`, and
+`LUNULA_JOB_WORKER_TIMEOUT`.
 
 Use `jobs:benchmark` in staging, or during a production maintenance window, to
 exercise sustained enqueue, worker claim/complete, failed-job retry, and simple
@@ -837,15 +825,15 @@ database latency sampling against the real queue tables. The command removes
 only its own benchmark rows unless `--keep` is passed.
 
 Execution timeouts are cooperative. A job may declare `def self.timeout = 30`;
-long-running loops call `Hacienda::Jobs.checkpoint!` so timeout and cancellation
+long-running loops call `Lunula::Jobs.checkpoint!` so timeout and cancellation
 requests can stop them safely. External I/O must still use its own timeout.
 
-Generated applications also mount a read-only queue dashboard at `/hac/jobs`
-and JSON health at `/hac/jobs/health`. Development access is local-only;
-production access requires `HACIENDA_DASHBOARD_PASSWORD` and uses HTTP Basic
+Generated applications also mount a read-only queue dashboard at `/luna/jobs`
+and JSON health at `/luna/jobs/health`. Development access is local-only;
+production access requires `LUNULA_DASHBOARD_PASSWORD` and uses HTTP Basic
 auth.
 
-Use `Hacienda.enqueue` for independent work. If a job relies on a database
+Use `Lunula.enqueue` for independent work. If a job relies on a database
 change made by the current request, enqueue it through the transaction:
 
 ```ruby
@@ -857,43 +845,43 @@ end
 ```
 
 The built-in database adapter writes the job atomically with the order. Durable
-external adapters use the generated `hacienda_job_outbox` table and receive a
+external adapters use the generated `lunula_job_outbox` table and receive a
 stable idempotency key when the worker relays the job. Rollbacks and nested
 savepoint rollbacks discard the corresponding work.
 
-Schedule work with `Hacienda.enqueue_in(seconds, Job, ...)` or
-`Hacienda.enqueue_at(time, Job, ...)`. A job module can declare
+Schedule work with `Lunula.enqueue_in(seconds, Job, ...)` or
+`Lunula.enqueue_at(time, Job, ...)`. A job module can declare
 `def self.priority = 10`; lower numbers run first, followed by scheduled time
 and insertion order. The database and development async adapters honor both.
 
 See the generated `DEPLOYMENT.md` for backup and rollback constraints.
 
-> **Hacienda difference:** The production opinion is one host, SQLite WAL, one
+> **Lunula difference:** The production opinion is one host, SQLite WAL, one
 > web process, one worker process, memory cache, and persistent local uploads.
 > PostgreSQL and object storage remain optional escape hatches rather than
 > mandatory infrastructure.
 
 ## 20. Capability summary
 
-| Rails guide feature | Hacienda equivalent | Status |
+| Rails guide feature | Lunula equivalent | Status |
 | --- | --- | --- |
-| `rails new` | `hac new` | Supported |
+| `rails new` | `luna new` | Supported |
 | Model generator | REST/domain/migration generators | Partial: no standalone model generator |
 | Active Record CRUD | Attributes + Store + repository | Supported explicitly |
 | Associations | Named repository queries | No association DSL |
 | Resource routes | Generated explicit routes | Supported differently |
 | Controllers/callbacks | Action modules, guards, context loaders | Supported differently |
 | Model form builder | HTML + explicit form helpers | Partial |
-| Authentication generator | `hac generate auth` | Supported |
+| Authentication generator | `luna generate auth` | Supported |
 | Fragment caching/Solid Cache | `cache_fragment` + memory/pluggable cache | Supported, process-local default |
 | Action Text | None | Missing |
-| Active Storage | Hacienda Storage | Core upload support; advanced attachment features missing |
+| Active Storage | Lunula Storage | Core upload support; advanced attachment features missing |
 | I18n | None built in | Missing; roadmap item |
-| Action Mailer | `Hacienda.mail` | Supported without mailer inheritance |
+| Action Mailer | `Lunula.mail` | Supported without mailer inheritance |
 | Commit callback | Explicit transaction + domain event | Supported differently |
-| Signed record tokens | `Hacienda.signed_token` | Supported |
+| Signed record tokens | `Lunula.signed_token` | Supported |
 | Propshaft/import maps | Static asset helpers | Partial; no build/fingerprinting pipeline |
-| Turbo/Stimulus | Hacienda Navigation + Helium | Supported with a narrower HTML-first model |
+| Turbo/Stimulus | Morpheus + Helium | Supported with a narrower HTML-first model |
 | Fixtures | Explicit test setup | Missing fixture convention |
 | Mail test helpers | In-memory deliveries | Supported |
 | RuboCop/Brakeman generation | Bring generic tools yourself | Missing generator integration |
@@ -903,14 +891,14 @@ See the generated `DEPLOYMENT.md` for backup and rollback constraints.
 
 ## 21. Run the completed example
 
-From the Hacienda repository:
+From the Lunula repository:
 
 ```sh
 cd examples/store
 bundle install
-bundle exec hac db:migrate
-bundle exec hac db:seed
-bundle exec hac start
+bundle exec luna db:migrate
+bundle exec luna db:seed
+bundle exec luna start
 ```
 
 Sign in with `admin@example.com` / `change-this-password`. Edit the seeded
@@ -918,5 +906,5 @@ out-of-stock product and increase its inventory to generate a stock notification
 in `tmp/mail`.
 
 The tutorial intentionally leaves the unsupported sections visible. Those gaps
-are useful roadmap input: Hacienda should stay small, but its boundaries should
+are useful roadmap input: Lunula should stay small, but its boundaries should
 never be ambiguous.
