@@ -8,6 +8,13 @@ session_expire_after = Integer(ENV.fetch("HACIENDA_SESSION_EXPIRE_AFTER", 60 * 6
 raise "HACIENDA_SESSION_EXPIRE_AFTER must be positive" unless session_expire_after.positive?
 session_store = ENV.fetch("HACIENDA_SESSION_STORE", "cookie")
 
+use Hacienda::Middleware::RequestLimits,
+  max_body_bytes: Integer(ENV.fetch("HACIENDA_MAX_REQUEST_BYTES", 10 * 1024 * 1024)),
+  max_query_bytes: Integer(ENV.fetch("HACIENDA_MAX_QUERY_BYTES", 64 * 1024)),
+  max_multipart_files: Integer(ENV.fetch("HACIENDA_MAX_MULTIPART_FILES", 16)),
+  max_multipart_parts: Integer(ENV.fetch("HACIENDA_MAX_MULTIPART_PARTS", 128)),
+  max_parameters: Integer(ENV.fetch("HACIENDA_MAX_PARAMETERS", 1024)),
+  max_parameter_depth: Integer(ENV.fetch("HACIENDA_MAX_PARAMETER_DEPTH", 16))
 allowed_hosts = ENV.fetch("HACIENDA_ALLOWED_HOSTS", "").split(",").map(&:strip).reject(&:empty?)
 allowed_hosts = [Hacienda.app_host] if allowed_hosts.empty? && Hacienda.env.production?
 use Hacienda::Middleware::HostAuthorization, hosts: allowed_hosts
@@ -32,6 +39,9 @@ use Hacienda::Middleware::RateLimiter,
     }
   ]
 use Rack::Head
+use Hacienda::Middleware::PendingMigrations,
+  database: DB,
+  directory: File.join(APP_ROOT, "db", "migrations")
 case session_store
 when "cookie"
   session_secret = ENV["HACIENDA_SESSION_SECRET"] || ENV["SESSION_SECRET"]
@@ -66,6 +76,13 @@ end
 use Hacienda::Middleware::CSRF
 use Rack::MethodOverride
 use Hacienda::Middleware::StorageFiles, storage: APP.storage
-use Rack::Static, urls: ["/assets"], root: File.join(APP_ROOT, "public")
+use Rack::Static, **Hacienda::Assets.rack_options(root: APP_ROOT)
 use Hacienda::Middleware::RequestLogger
-run APP
+
+map "/hac/mail" do
+  run Hacienda::Mailer::Inbox.new(root: APP_ROOT)
+end
+
+map "/" do
+  run APP
+end

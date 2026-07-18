@@ -20,14 +20,14 @@ class GeneratorSnapshotTest < Minitest::Test
     config/environments/production.rb
     db/migrations/20260629000000_create_hacienda_runtime.rb
     app/domains/home/routes.rb
-    app/domains/home/actions/index.rb
-    app/domains/home/actions/up.rb
+    app/domains/home/actions.rb
     app/domains/home/views/index.erb
     app/errors/404.erb
     app/errors/500.erb
     app/layouts/application.erb
     test/test_helper.rb
-    test/integration/home_test.rb
+    test/domains/home/actions_test.rb
+    test/integration/.keep
     README.md
   ].freeze
 
@@ -39,6 +39,9 @@ class GeneratorSnapshotTest < Minitest::Test
     app/domains/posts/views/index.erb
     app/domains/posts/views/show.erb
     app/domains/posts/views/form.erb
+    test/domains/posts/post_test.rb
+    test/domains/posts/repository_test.rb
+    test/domains/posts/actions_test.rb
   ].freeze
 
   AUTH_FILES = %w[
@@ -51,19 +54,15 @@ class GeneratorSnapshotTest < Minitest::Test
     app/domains/auth/session.rb
     app/domains/auth/required.rb
     app/domains/auth/mailer.rb
-    app/domains/auth/actions/authenticate.rb
-    app/domains/auth/actions/complete_magic_login.rb
-    app/domains/auth/actions/confirm_magic_link.rb
-    app/domains/auth/actions/create_account.rb
-    app/domains/auth/actions/confirm_email.rb
-    app/domains/auth/actions/magic_login.rb
-    app/domains/auth/actions/send_magic_link.rb
-    app/domains/auth/actions/update_password.rb
+    app/domains/auth/token_verifier.rb
+    app/domains/auth/actions.rb
     app/domains/auth/views/login.erb
     app/domains/auth/views/magic_login.erb
     app/domains/auth/views/magic_login_confirm.erb
     app/domains/auth/views/signup.erb
     app/domains/auth/views/reset_password.erb
+    test/domains/auth/user_test.rb
+    test/domains/auth/actions_test.rb
   ].freeze
 
   def setup
@@ -107,6 +106,16 @@ class GeneratorSnapshotTest < Minitest::Test
       "auth",
       entries(AUTH_FILES) + [["db/migrations/TIMESTAMP_create_users.rb", migration]]
     )
+  end
+
+  def test_repeated_new_app_attempt_does_not_delete_the_existing_application
+    @generator.new_app
+
+    error = assert_raises(Hacienda::Generator::Error) { @generator.new_app }
+
+    assert_includes error.message, "destination already exists"
+    assert_path_exists File.join(@root, "config", "application.rb")
+    assert_path_exists File.join(@root, "public", "assets", "helium.js")
   end
 
   private

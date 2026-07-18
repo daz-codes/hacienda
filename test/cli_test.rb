@@ -48,6 +48,7 @@ class CLITest < Minitest::Test
     assert File.file?(File.join(root, "public", "assets", "helium-sse.js"))
     assert File.file?(File.join(root, "public", "assets", "helium-csp-sse.js"))
     assert File.file?(File.join(root, "public", "assets", "jexpr.js"))
+    assert File.file?(File.join(root, "public", "assets", "HELIUM-LICENSE.txt"))
     assert File.file?(File.join(root, "public", "assets", "hacienda-navigation.js"))
     assert File.file?(File.join(root, "public", "assets", "idiomorph.esm.js"))
     assert File.file?(File.join(root, "public", "assets", "application.css"))
@@ -73,7 +74,8 @@ class CLITest < Minitest::Test
     assert File.file?(File.join(root, "config", "environments", "test.rb"))
     assert File.file?(File.join(root, "config", "environments", "production.rb"))
     assert File.file?(File.join(root, "test", "test_helper.rb"))
-    assert File.file?(File.join(root, "test", "integration", "home_test.rb"))
+    assert File.file?(File.join(root, "test", "domains", "home", "actions_test.rb"))
+    assert File.file?(File.join(root, "test", "integration", ".keep"))
     assert_includes File.read(File.join(root, "config", "environments", "development.rb")),
       "Hacienda.reload = true"
     assert_includes File.read(File.join(root, "config/application.rb")),
@@ -102,6 +104,7 @@ class CLITest < Minitest::Test
       "scheduler: bundle exec hac jobs:schedule"
     assert_includes File.read(File.join(root, "Dockerfile")), "USER hacienda"
     assert_includes File.read(File.join(root, "Dockerfile")), %(EXPOSE 5151)
+    assert_includes File.read(File.join(root, "Dockerfile")), "bundle exec hac assets:precompile"
     refute_includes File.read(File.join(root, "Dockerfile")), "config/master.key"
     assert_includes File.read(File.join(root, ".dockerignore")), "config/master.key"
     assert_includes File.read(File.join(root, "config", "environments", "production.rb")),
@@ -116,15 +119,31 @@ class CLITest < Minitest::Test
     assert_includes deploy.fetch("volumes"), "weekend_db:/app/db"
     assert_equal "app exec --primary --reuse \"bundle exec hac db:migrate\"",
       deploy.dig("aliases", "migrate")
-    assert_equal File.read(File.expand_path("../../helium/helium.js", __dir__)),
+    bundled_assets = File.expand_path("../lib/hacienda/assets", __dir__)
+    assert_equal File.read(File.join(bundled_assets, "helium.js")),
       File.read(File.join(root, "public", "assets", "helium.js"))
-    assert_equal File.read(File.expand_path("../../helium/helium-csp.js", __dir__)),
+    assert_equal File.read(File.join(bundled_assets, "helium-csp.js")),
       File.read(File.join(root, "public", "assets", "helium-csp.js"))
-    assert_equal File.read(File.expand_path("../../helium/helium-sse.js", __dir__)),
+    assert_equal File.read(File.join(bundled_assets, "helium-sse.js")),
       File.read(File.join(root, "public", "assets", "helium-sse.js"))
-    assert_equal File.read(File.expand_path("../../helium/helium-csp-sse.js", __dir__)),
+    assert_equal File.read(File.join(bundled_assets, "helium-csp-sse.js")),
       File.read(File.join(root, "public", "assets", "helium-csp-sse.js"))
+    assert_equal File.read(File.join(bundled_assets, "HELIUM-LICENSE.txt")),
+      File.read(File.join(root, "public", "assets", "HELIUM-LICENSE.txt"))
 
+    reset_cli_output
+    assert_equal 0, run_cli(["assets:precompile"], root), @err.string
+    assert_match(/Compiled \d+ assets\./, @out.string)
+    asset_manifest = JSON.parse(File.read(File.join(root, "public", "assets", ".manifest.json")))
+    navigation_asset = asset_manifest.fetch("assets").fetch("hacienda-navigation.js")
+    idiomorph_asset = asset_manifest.fetch("assets").fetch("idiomorph.esm.js")
+    assert_includes File.read(File.join(root, "public", "assets", navigation_asset)),
+      %("./#{idiomorph_asset}")
+    assert_match(%r{\A/assets/hacienda-navigation-[0-9a-f]{16}\.js\z},
+      Hacienda::Assets.path("hacienda-navigation.js", root:, environment: "production"))
+
+    reset_cli_output
+    assert_equal 0, run_cli(["db:migrate"], root), @err.string
     app = Rack::Builder.parse_file(File.join(root, "config.ru"))
     response = Rack::MockRequest.new(app).get("/")
     navigation_response = Rack::MockRequest.new(app).get(
@@ -140,6 +159,7 @@ class CLITest < Minitest::Test
     stylesheet = Rack::MockRequest.new(app).get("/assets/application.css")
     dashboard = Rack::MockRequest.new(app).get("/hac/jobs", "REMOTE_ADDR" => "127.0.0.1")
     dashboard_health = Rack::MockRequest.new(app).get("/hac/jobs/health", "REMOTE_ADDR" => "127.0.0.1")
+    mail_inbox = Rack::MockRequest.new(app).get("/hac/mail", "REMOTE_ADDR" => "127.0.0.1")
 
     assert_equal 200, response.status
     assert_includes response.body, "Hacienda is running."
@@ -176,6 +196,8 @@ class CLITest < Minitest::Test
     assert_includes dashboard.body, "Hacienda Jobs"
     assert_equal 200, dashboard_health.status
     assert_includes dashboard_health.body, %("status":"ok")
+    assert_equal 200, mail_inbox.status
+    assert_includes mail_inbox.body, "Hacienda Mail"
     assert_includes File.read(File.join(root, "app/layouts/application.erb")),
       %(<%= stylesheet_link "application.css" %>)
     assert_includes File.read(File.join(root, "app/layouts/application.erb")),
@@ -186,6 +208,20 @@ class CLITest < Minitest::Test
       %(<%= navigation_page content, context: context %>)
     assert_includes File.read(File.join(root, "test/test_helper.rb")),
       "class ApplicationTest < Minitest::Test"
+
+    begin
+      Hacienda.env = "production"
+      production_response = Rack::MockRequest.new(app).get("/")
+      assert_equal 200, production_response.status
+      assert_includes production_response.body, "/assets/#{navigation_asset}"
+      assert_includes production_response.body,
+        "/assets/#{asset_manifest.fetch("assets").fetch("application.css")}"
+      compiled_navigation = Rack::MockRequest.new(app).get("/assets/#{navigation_asset}")
+      assert_equal 200, compiled_navigation.status
+      assert_equal "public, max-age=31536000, immutable", compiled_navigation["cache-control"]
+    ensure
+      Hacienda.env = "development"
+    end
 
     cleanup_loaded_app_constant
     stdout, stderr, test_status = Open3.capture3(
@@ -201,6 +237,8 @@ class CLITest < Minitest::Test
     assert_includes File.read(File.join(root, "config.ru")), "Hacienda::Middleware::CSRF"
     assert_includes File.read(File.join(root, "config.ru")), "Hacienda::Middleware::RequestLogger"
     assert_includes File.read(File.join(root, "config.ru")), "Hacienda::Middleware::HostAuthorization"
+    assert_includes File.read(File.join(root, "config.ru")), "Hacienda::Middleware::RequestLimits"
+    assert_includes File.read(File.join(root, "config.ru")), "HACIENDA_MAX_REQUEST_BYTES"
     assert_includes File.read(File.join(root, "config.ru")), "HACIENDA_ALLOWED_HOSTS"
     assert_includes File.read(File.join(root, "config.ru")), "Hacienda::Middleware::SecurityHeaders"
     assert_includes File.read(File.join(root, "config.ru")), "hsts: Hacienda.env.production?"
@@ -228,6 +266,25 @@ class CLITest < Minitest::Test
     assert Hacienda.env.development?
     assert_equal :file, Hacienda.mail_config.delivery
     assert_instance_of Hacienda::Jobs::Adapters::Async, Hacienda.job_config.adapter
+  end
+
+  def test_hac_new_removes_partial_application_when_explicit_helium_override_is_invalid
+    target = File.join(@directory, "incomplete")
+    original_helium_path = ENV["HELIUM_PATH"]
+
+    ENV["HELIUM_PATH"] = File.join(@directory, "missing", "helium.js")
+    status = Hacienda::CLI.start(
+      ["new", "incomplete"],
+      out: @out,
+      err: @err,
+      cwd: @directory
+    )
+
+    assert_equal 1, status
+    assert_includes @err.string, "HELIUM_PATH does not point to helium.js"
+    refute_path_exists target
+  ensure
+    original_helium_path ? ENV["HELIUM_PATH"] = original_helium_path : ENV.delete("HELIUM_PATH")
   end
 
   def test_credentials_can_be_read_and_shown
@@ -300,6 +357,35 @@ class CLITest < Minitest::Test
     ], command
   end
 
+  def test_hac_start_refuses_to_boot_with_pending_migrations
+    root = database_app(
+      "pending-start",
+      "20260717090000_create_entries.rb" => <<~RUBY
+        Sequel.migration do
+          change do
+            create_table(:entries) { primary_key :id }
+          end
+        end
+      RUBY
+    )
+    File.write(File.join(root, "config.ru"), "run APP\n")
+
+    with_isolated_app_constant do
+      status = Hacienda::CLI.start(
+        ["start"],
+        out: @out,
+        err: @err,
+        cwd: root,
+        executor: ->(*) { flunk "rackup should not start" }
+      )
+
+      assert_equal 1, status
+      assert_includes @err.string, "1 pending migration"
+      assert_includes @err.string, "20260717090000_create_entries.rb"
+      assert_includes @err.string, "bundle exec hac db:migrate"
+    end
+  end
+
   def test_hac_console_boots_the_application_in_irb
     root = File.join(@directory, "console_app")
     FileUtils.mkdir_p(File.join(root, "config"))
@@ -345,7 +431,7 @@ class CLITest < Minitest::Test
     assert_includes @err.string, "not a Hacienda application"
   end
 
-  def test_hac_routes_lists_actions_and_guards_in_declaration_order
+  def test_hac_routes_lists_and_looks_up_domain_owned_routes
     root = File.join(@directory, "routes_app")
     FileUtils.mkdir_p(File.join(root, "config"))
     FileUtils.mkdir_p(File.join(root, "app", "domains", "catalog"))
@@ -366,7 +452,33 @@ class CLITest < Minitest::Test
 
       guard RoutesTestAuth::Required do
         post "/products", :create
-        delete "/products/:id", :destroy
+        delete "/products/:id", :destroy, actions: :admin
+      end
+    RUBY
+    File.write(File.join(root, "app", "domains", "catalog", "actions.rb"), <<~RUBY)
+      module Catalog
+        class Actions < Hacienda::Actions
+          def index(_context, _params) = {}
+          def show(_context, _params) = {}
+          def create(_context, _params) = {}
+        end
+      end
+    RUBY
+    FileUtils.mkdir_p(File.join(root, "app", "domains", "catalog", "actions"))
+    File.write(File.join(root, "app", "domains", "catalog", "actions", "admin_actions.rb"), <<~RUBY)
+      module Catalog
+        class AdminActions < Hacienda::Actions
+          def destroy(_context, _params) = {}
+        end
+      end
+    RUBY
+    FileUtils.mkdir_p(File.join(root, "app", "domains", "home"))
+    File.write(File.join(root, "app", "domains", "home", "routes.rb"), %(get "/up", :show\n))
+    File.write(File.join(root, "app", "domains", "home", "actions.rb"), <<~RUBY)
+      module Home
+        class Actions < Hacienda::Actions
+          def show(_context, _params) = "OK"
+        end
       end
     RUBY
 
@@ -376,12 +488,44 @@ class CLITest < Minitest::Test
       assert_equal 0, status, @err.string
       rows = @out.string.lines.map { |line| line.strip.split(/\s{2,}/) }
       assert_equal [
-        %w[VERB PATH ACTION GUARDS],
-        ["GET", "/products", "Catalog::Index", "-"],
-        ["GET", "/products/:id", "Catalog::Show", "-"],
-        ["POST", "/products", "Catalog::Create", "RoutesTestAuth::Required"],
-        ["DELETE", "/products/:id", "Catalog::Destroy", "RoutesTestAuth::Required"]
+        %w[VERB PATH DOMAIN ACTION GUARDS SOURCE],
+        ["GET", "/products", "catalog", "Catalog::Actions#index", "-", "app/domains/catalog/routes.rb:1"],
+        ["GET", "/products/:id", "catalog", "Catalog::Actions#show", "-", "app/domains/catalog/routes.rb:2"],
+        ["POST", "/products", "catalog", "Catalog::Actions#create", "RoutesTestAuth::Required", "app/domains/catalog/routes.rb:5"],
+        ["DELETE", "/products/:id", "catalog", "Catalog::AdminActions#destroy", "RoutesTestAuth::Required", "app/domains/catalog/routes.rb:6"],
+        ["GET", "/up", "home", "Home::Actions#show", "-", "app/domains/home/routes.rb:1"]
       ], rows
+
+      reset_cli_output
+      status = Hacienda::CLI.start(["routes", "GET", "/products/42"], out: @out, err: @err, cwd: root)
+      assert_equal 0, status, @err.string
+      assert_includes @out.string, "Catalog::Actions#show"
+      assert_includes @out.string, "app/domains/catalog/routes.rb:2"
+      refute_includes @out.string, "Catalog::AdminActions#destroy"
+
+      reset_cli_output
+      status = Hacienda::CLI.start(["routes", "HEAD", "/products/42"], out: @out, err: @err, cwd: root)
+      assert_equal 0, status, @err.string
+      assert_includes @out.string, "GET"
+      assert_includes @out.string, "Catalog::Actions#show"
+
+      reset_cli_output
+      status = Hacienda::CLI.start(["routes", "/products"], out: @out, err: @err, cwd: root)
+      assert_equal 0, status, @err.string
+      assert_includes @out.string, "Catalog::Actions#index"
+      assert_includes @out.string, "Catalog::Actions#create"
+      refute_includes @out.string, "Catalog::Actions#show"
+
+      reset_cli_output
+      status = Hacienda::CLI.start(["routes", "--domain", "catalog"], out: @out, err: @err, cwd: root)
+      assert_equal 0, status, @err.string
+      assert_equal 4, @out.string.lines.length - 1
+      refute_includes @out.string, "Home::Actions#show"
+
+      reset_cli_output
+      status = Hacienda::CLI.start(["routes", "GET", "/missing"], out: @out, err: @err, cwd: root)
+      assert_equal 1, status
+      assert_equal "No route matches GET /missing.\n", @out.string
     end
   end
 
@@ -730,6 +874,7 @@ class CLITest < Minitest::Test
       err: @err,
       cwd: root
     )
+    assert File.file?(File.join(root, "test/domains/comments/.keep"))
     assert_equal 0, Hacienda::CLI.start(
       ["generate", "action", "comments", "approve"],
       out: @out,
@@ -755,11 +900,12 @@ class CLITest < Minitest::Test
       cwd: root
     )
 
-    assert File.file?(File.join(root, "app/domains/comments/actions/approve.rb"))
+    assert_includes File.read(File.join(root, "app/domains/comments/actions.rb")),
+      "def approve(_context, _params)"
     assert_includes File.read(File.join(root, "app/domains/posts/routes.rb")),
       %(post "/posts", :create)
     assert_includes File.read(File.join(root, "app/domains/posts/actions.rb")),
-      "def self.respond(context, params)"
+      "def create(context, params)"
     assert_includes File.read(File.join(root, "app/domains/posts/actions.rb")),
       "attributes = params.permit(:title, :body)"
     assert_includes File.read(File.join(root, "app/domains/posts/post.rb")),
@@ -786,9 +932,9 @@ class CLITest < Minitest::Test
       "include Hacienda::Attributes"
     assert_includes File.read(File.join(root, "app/domains/auth/repository.rb")),
       "database: APP.database"
-    assert_includes File.read(File.join(root, "app/domains/auth/actions/create_account.rb")),
+    assert_includes File.read(File.join(root, "app/domains/auth/actions.rb")),
       "attributes = params.permit(:email, :password)"
-    assert_includes File.read(File.join(root, "app/domains/auth/actions/create_account.rb")),
+    assert_includes File.read(File.join(root, "app/domains/auth/actions.rb")),
       "deliver_later"
     assert_includes File.read(File.join(root, "app/domains/auth/mailer.rb")),
       "Hacienda.app_url"
@@ -805,19 +951,16 @@ class CLITest < Minitest::Test
     assert_includes File.read(File.join(root, "app/domains/auth/required.rb")),
       "def check(context, _params)"
     assert File.file?(File.join(root, "app/domains/auth/mailer.rb"))
-    assert File.file?(File.join(root, "app/domains/auth/actions/verify_email.rb"))
-    assert File.file?(File.join(root, "app/domains/auth/actions/confirm_email.rb"))
-    assert File.file?(File.join(root, "app/domains/auth/actions/magic_login.rb"))
-    assert File.file?(File.join(root, "app/domains/auth/actions/send_magic_link.rb"))
-    assert File.file?(File.join(root, "app/domains/auth/actions/confirm_magic_link.rb"))
-    assert File.file?(File.join(root, "app/domains/auth/actions/complete_magic_login.rb"))
-    assert File.file?(File.join(root, "app/domains/auth/actions/send_password_reset.rb"))
+    auth_actions = File.read(File.join(root, "app/domains/auth/actions.rb"))
+    %w[verify_email confirm_email magic_login send_magic_link confirm_magic_link complete_magic_login send_password_reset signup].each do |action|
+      assert_includes auth_actions, "def #{action}("
+    end
+    assert File.file?(File.join(root, "app/domains/auth/token_verifier.rb"))
     assert File.file?(File.join(root, "app/domains/auth/views/verify_email.erb"))
     assert File.file?(File.join(root, "app/domains/auth/views/magic_login.erb"))
     assert File.file?(File.join(root, "app/domains/auth/views/magic_login_confirm.erb"))
     assert File.file?(File.join(root, "app/domains/auth/views/forgot_password.erb"))
     assert File.file?(File.join(root, "app/domains/auth/views/reset_password.erb"))
-    assert File.file?(File.join(root, "app/domains/auth/actions/signup.rb"))
     assert File.file?(File.join(root, "app/domains/auth/views/signup.erb"))
     assert File.file?(File.join(root, "app/domains/auth/load_current_user.rb"))
     assert_includes File.read(File.join(root, "app/domains/auth/routes.rb")),
@@ -840,14 +983,33 @@ class CLITest < Minitest::Test
       %(context_loaders: ["Auth::LoadCurrentUser"])
     assert_includes File.read(File.join(root, "app/layouts/application.erb")),
       %(<%= navigation_page content, context: context %>)
+    assert File.file?(File.join(root, "test/domains/comments/actions_test.rb"))
+    assert_includes File.read(File.join(root, "test/domains/comments/actions_test.rb")),
+      "Comments::Actions.new.approve"
+    assert File.file?(File.join(root, "test/domains/posts/post_test.rb"))
+    assert File.file?(File.join(root, "test/domains/posts/repository_test.rb"))
+    assert File.file?(File.join(root, "test/domains/posts/actions_test.rb"))
+    assert File.file?(File.join(root, "test/domains/auth/user_test.rb"))
+    assert File.file?(File.join(root, "test/domains/auth/actions_test.rb"))
+    refute File.exist?(File.join(root, "test/domains/comments/.keep"))
 
     migrations = Dir[File.join(root, "db/migrations/*.rb")].map { |path| File.basename(path) }
     assert_equal 4, migrations.length
     assert_equal migrations.length, migrations.map { |name| name.split("_").first }.uniq.length
     assert migrations.any? { |name| name.end_with?("_add_excerpt_to_posts.rb") }
+
+    stdout, stderr, test_status = Open3.capture3(
+      Gem.ruby,
+      "-I",
+      File.expand_path("../lib", __dir__),
+      "-e",
+      'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }',
+      chdir: root
+    )
+    assert test_status.success?, "generated tests failed:\n#{stdout}\n#{stderr}"
   end
 
-  def test_generators_support_inline_and_split_action_layouts
+  def test_action_generator_supports_multiple_methods_in_named_action_sets
     assert_equal 0, Hacienda::CLI.start(
       ["new", "layouts"],
       out: @out,
@@ -857,23 +1019,52 @@ class CLITest < Minitest::Test
     root = File.join(@directory, "layouts")
 
     assert_equal 0, Hacienda::CLI.start(
-      ["generate", "rest", "posts", "--split-actions"],
+      ["generate", "rest", "posts"],
       out: @out,
       err: @err,
       cwd: root
     )
-    assert File.file?(File.join(root, "app/domains/posts/actions/create.rb"))
-    refute File.file?(File.join(root, "app/domains/posts/actions.rb"))
+    assert_includes File.read(File.join(root, "app/domains/posts/actions.rb")), "def create(context, params)"
 
     assert_equal 0, Hacienda::CLI.start(
-      ["generate", "action", "posts", "publish", "--inline"],
+      ["generate", "action", "posts", "publish", "--actions", "publishing"],
       out: @out,
       err: @err,
       cwd: root
     )
-    actions = File.read(File.join(root, "app/domains/posts/actions.rb"))
-    assert_includes actions, "module Publish"
-    assert_includes actions, "def self.respond(_context, _params)"
+    assert_equal 0, Hacienda::CLI.start(
+      ["generate", "action", "posts", "archive", "--actions", "publishing"],
+      out: @out,
+      err: @err,
+      cwd: root
+    )
+    actions = File.read(File.join(root, "app/domains/posts/actions/publishing_actions.rb"))
+    assert_includes actions, "class PublishingActions < Hacienda::Actions"
+    assert_includes actions, "def publish(_context, _params)"
+    assert_includes actions, "def archive(_context, _params)"
+    assert_includes File.read(File.join(root, "app/domains/posts/routes.rb")),
+      %(post "/posts/:id/publish", :publish, actions: :publishing)
+    action_tests = File.read(File.join(root, "test/domains/posts/publishing_actions_test.rb"))
+    assert_includes action_tests, "Posts::PublishingActions.new.publish"
+    assert_includes action_tests, "Posts::PublishingActions.new.archive"
+
+    reset_cli_output
+    assert_equal 1, Hacienda::CLI.start(
+      ["generate", "rest", "comments", "--split-actions"],
+      out: @out,
+      err: @err,
+      cwd: root
+    )
+    assert_includes @err.string, "unknown option: --split-actions"
+
+    reset_cli_output
+    assert_equal 1, Hacienda::CLI.start(
+      ["generate", "action", "posts", "preview", "--inline"],
+      out: @out,
+      err: @err,
+      cwd: root
+    )
+    assert_includes @err.string, "unknown option: --inline"
   end
 
   private
@@ -1070,13 +1261,13 @@ class CLITest < Minitest::Test
         job_outbox: Hacienda.job_outbox
       )
     RUBY
-    FileUtils.mkdir_p(File.join(root, "app", "domains", "home", "actions"))
+    FileUtils.mkdir_p(File.join(root, "app", "domains", "home"))
     File.write(File.join(root, "app", "domains", "home.rb"), "module Home; end\n")
     File.write(File.join(root, "app", "domains", "home", "routes.rb"), %(get "/up", :up\n))
-    File.write(File.join(root, "app", "domains", "home", "actions", "up.rb"), <<~RUBY)
+    File.write(File.join(root, "app", "domains", "home", "actions.rb"), <<~RUBY)
       module Home
-        module Up
-          def self.respond(_context, _params)
+        class Actions < Hacienda::Actions
+          def up(_context, _params)
             text "OK"
           end
         end

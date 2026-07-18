@@ -1,0 +1,17 @@
+source "https://rubygems.org"
+
+gem "hacienda", path: "../.."
+gem "puma", "~> 7.0"
+gem "rake", "~> 13.2"
+gem "rack-session", "~> 2.1"
+gem "sqlite3", "~> 2.0"
+
+group :development do
+  gem "kamal", "~> 2.0", require: false
+end
+
+group :test do
+  gem "minitest", "~> 6.0"
+  gem "rack-test", "~> 2.2"
+end
+gem "bcrypt", "~> 3.1"

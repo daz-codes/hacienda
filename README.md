@@ -3,16 +3,21 @@
 Hacienda is a lightweight, domain-oriented Ruby web framework. Its command-line
 tool is `hac`, with `fac` provided as an equivalent alias.
 
+The supported application contract is documented in the
+[public API inventory](docs/public-api.md). See the [upgrade policy](docs/upgrading.md),
+[supported versions](docs/support.md), and [changelog](CHANGELOG.md) before
+changing framework versions.
+
 The first-stage implementation provides:
 
 - explicit Rack routing in each domain;
-- module actions with a single `respond(context, params)` entry point;
+- action methods on fresh `Hacienda::Actions` instances;
 - automatically escaped ERB rendering when an action returns a Hash;
 - layouts and partial-based components;
 - HTML helpers for links, buttons, forms, assets, flash, and errors;
 - explicit response helpers for redirects, JSON, text, and custom responses;
 - explicit route guards and request-scoped context;
-- separate `respond(context, params)` action arguments;
+- separate `(context, params)` action arguments;
 - nested params helpers with `slice`, `permit`, and `require`;
 - form, query, route, and JSON request parameters through one `Params` object;
 - a small validation/errors convention for domain objects;
@@ -53,11 +58,18 @@ Open a console with the application environment loaded:
 bundle exec hac console
 ```
 
-Inspect the application’s explicit routes, action modules, and guards:
+Inspect the application’s explicit routes, action methods, and guards:
 
 ```sh
 bundle exec hac routes
+bundle exec hac routes --domain posts
+bundle exec hac routes GET /posts/42
+bundle exec hac routes /posts/42
 ```
+
+The route table includes the owning domain and declaration source. A lookup with
+an HTTP method shows the route Hacienda would dispatch; a path-only lookup shows
+the selected route for every matching verb.
 
 Manage migrations and seeds without going through Rake:
 
@@ -83,15 +95,38 @@ bundle exec rake test
 ```
 
 Tests subclass `ApplicationTest`, exercise the complete `config.ru` middleware
-stack, and use a separate test database. Pending test migrations are applied
-when `test/test_helper.rb` boots. The base helper exposes `database` and
-`csrf_token` for explicit persistence setup and CSRF-protected requests.
+stack, and use a fresh temporary test database for each test process. Pending
+test migrations are applied when `test/test_helper.rb` boots. The base helper
+exposes `database` and `csrf_token` for explicit persistence setup and
+CSRF-protected requests. Set `DATABASE_URL` explicitly to exercise the same
+application suite against another database.
+
+Tests mirror application ownership without joining the production autoload
+tree:
 
 ```text
-VERB    PATH            ACTION          GUARDS
-GET     /posts          Posts::Index    -
-POST    /posts          Posts::Create   Auth::Required
-DELETE  /posts/:id      Posts::Destroy  Auth::Required
+test/
+├── domains/
+│   └── posts/
+│       ├── post_test.rb
+│       ├── repository_test.rb
+│       └── actions_test.rb
+└── integration/
+    └── publishing_workflow_test.rb
+```
+
+Put plain domain-object tests, repository contracts, and focused action tests
+under `test/domains/<domain>`. Action tests may subclass `ApplicationTest` when
+the Rack boundary is the useful contract. Put complete customer journeys and
+workflows crossing domain boundaries under `test/integration`. Domain, action,
+REST, and authentication generators create these directories and executable
+tests as behavior is added; they do not add placeholder assertions.
+
+```text
+VERB    PATH            DOMAIN  ACTION                   GUARDS          SOURCE
+GET     /posts          posts   Posts::Actions#index     -               app/domains/posts/routes.rb:1
+POST    /posts          posts   Posts::Actions#create    Auth::Required  app/domains/posts/routes.rb:2
+DELETE  /posts/:id      posts   Posts::Actions#destroy   Auth::Required  app/domains/posts/routes.rb:3
 ```
 
 Generated applications include Docker and Kamal 2 templates. See the
@@ -112,8 +147,8 @@ maps to:
 
 ```ruby
 module Posts
-  module Show
-    def self.respond(_context, params)
+  class Actions < Hacienda::Actions
+    def show(_context, params)
       {post: Repository.find(params[:id])}
     end
   end
@@ -121,6 +156,18 @@ end
 ```
 
 and renders `app/domains/posts/views/show.erb`.
+
+Business routes belong in `app/domains/<domain>/routes.rb`. The file determines
+the owning domain and therefore the action namespace; Hacienda deliberately has
+no second global business-route file. Rack infrastructure such as static files,
+the jobs dashboard, and the development mail inbox remains mounted explicitly
+in `config.ru`.
+
+Hacienda rejects route collisions while the application boots or reloads. This
+includes normalized duplicates, structurally equivalent dynamic paths such as
+`/posts/:id` and `/posts/:slug`, and equal-specificity patterns that can match
+the same concrete request. Different HTTP verbs and intentional static
+precedence such as `/posts/new` over `/posts/:id` remain valid.
 
 Generate a standalone migration with:
 
@@ -296,8 +343,8 @@ JSON request bodies use the same nested normalization and whitelisting:
 
 ```ruby
 module Posts
-  module Create
-    def self.respond(_context, params)
+  class Actions < Hacienda::Actions
+    def create(_context, params)
       attributes = params.require(:post).permit(:title, :body)
       json Repository.create(attributes), status: 201
     end
@@ -775,6 +822,30 @@ flows backed by signed expiring tokens and mail delivery. Email verification and
 magic-link login use a GET confirmation page followed by a CSRF-protected POST,
 so link scanners cannot complete the flow by fetching the URL. Password reset
 links use a reset-version token rather than exposing password hashes.
+Verification, magic-login, and password-reset tokens become invalid after their
+first successful use. Login always performs one BCrypt comparison, including
+when the email is unknown, and valid duplicate signups perform the same password
+hashing work and return the same response as new accounts. Neutral responses
+for signup, verification, magic links, and password reset reduce
+account discovery; they do not remove every timing signal from database access,
+mail queues, or custom code. Keep the generated auth rate limits and obtain a
+specialist review for high-risk identity systems.
+
+Route guards establish authentication and coarse authorization. Record-level
+authorization remains an application policy and must fail closed after loading
+the record:
+
+```ruby
+user = context.current_user
+post = Posts::Repository.find(params[:id])
+return response("Forbidden", status: 403) unless user && post && post.author_id == user.id
+```
+
+Put repeated rules in a domain policy object such as
+`Posts::Policy.new(context.current_user, post).update?`. A missing record,
+missing user, unknown role, or policy error must never grant access. Test both
+the allowed owner and a different authenticated user through the full Rack
+stack.
 
 Generated apps require `HACIENDA_SESSION_SECRET` or `SESSION_SECRET` in
 production. Development keeps a visible fallback secret so local apps boot
@@ -823,6 +894,23 @@ use Hacienda::Middleware::RateLimiter,
     {method: "POST", path: "/login", limit: 10, period: 60}
   ]
 ```
+
+`Hacienda::Middleware::RequestLimits` is the first generated middleware. Its
+defaults are a 10 MiB body, 64 KiB query string, 16 uploaded files, 128 total
+multipart parts, 1,024 parameters, and 16 levels of nesting. Override them with
+`HACIENDA_MAX_REQUEST_BYTES`, `HACIENDA_MAX_QUERY_BYTES`,
+`HACIENDA_MAX_MULTIPART_FILES`, `HACIENDA_MAX_MULTIPART_PARTS`,
+`HACIENDA_MAX_PARAMETERS`, and `HACIENDA_MAX_PARAMETER_DEPTH`. Exceeded bodies
+and multipart counts return stable `413` responses; malformed or over-complex
+parameters return stable `400` responses.
+
+The middleware checks declared sizes and wraps `rack.input`, so streamed bodies
+are also bounded. Rack exposes multipart and structured-parser limits
+process-wide; applications sharing one Rack process must use the same values.
+The web server or reverse proxy still owns request-header limits, read/header
+timeouts for slow clients, connection concurrency, and preferably a matching
+body limit before Rack allocates a request. Do not rely on application
+middleware alone for denial-of-service protection.
 
 The default rate limiter store is in-process. It is thread-safe and expired
 buckets are swept. It also caps the number of live buckets to avoid unbounded
@@ -945,7 +1033,8 @@ blob = context.storage.store(
   params[:cover],
   prefix: "post-covers",
   max_bytes: 5 * 1024 * 1024,
-  content_types: ["image/jpeg", "image/png", "image/webp"]
+  content_types: ["image/jpeg", "image/png", "image/webp"],
+  content_inspector: Hacienda::Storage::ContentTypeInspector.new
 )
 
 post.attach_cover(blob)
@@ -989,10 +1078,24 @@ short-lived signed URLs from a remote adapter.
 
 Security boundaries remain explicit:
 
-- browser filenames and content types are untrusted metadata;
-- `content_types:` checks the declared media type, not file signatures;
-- `max_bytes:` validates the parsed file, so also enforce request-body limits at
-  the proxy/server for denial-of-service protection;
+- browser filenames, extensions, and multipart content types are untrusted
+  metadata;
+- `content_types:` checks declared metadata; `ContentTypeInspector` additionally
+  checks the extension and magic bytes for PNG, JPEG, GIF, WebP, AVIF, PDF, and
+  ZIP. Other formats fail closed unless initialized with
+  `allow_unrecognized: true`;
+- pass any callable as `content_inspector:` to integrate an antivirus scanner,
+  image decoder, or libmagic adapter. It receives an `Upload`, must return a
+  truthy value to accept it, and can inspect a bounded prefix with
+  `upload.read_prefix(bytes)`;
+- a valid signature does not prove the whole file is safe. Polyglots can carry
+  active content after a valid header; decode and re-encode images when that
+  threat matters, scan documents, and never render HTML or SVG inline;
+- inspect compressed and archive contents with explicit expanded-size, entry
+  count, compression-ratio, recursion, CPU, and memory limits. A small upload
+  can still be a decompression bomb;
+- `max_bytes:` validates the parsed file, while `RequestLimits` bounds the
+  complete Rack body. Configure matching server/proxy limits too;
 - store a replacement before deleting the old object, and clean up a new object
   when a database write fails;
 - `overwrite: false` is atomic, but `overwrite: true` intentionally replaces the
@@ -1005,6 +1108,57 @@ Security boundaries remain explicit:
 
 See the blog's `Posts::Coverable` behavior and create/update actions for a full
 multipart-to-domain example.
+
+See [SECURITY.md](SECURITY.md) for private vulnerability reporting, supported
+versions, disclosure expectations, and the current independent-review status.
+
+## Assets
+
+Put browser assets in `public/assets` and reference them through `asset_path`,
+`stylesheet_link`, or `javascript_include`. Development keeps logical paths and
+readable source files. Before a non-Docker production deployment, compile the
+asset manifest:
+
+```sh
+bundle exec hac assets:precompile
+```
+
+Compilation writes deterministic SHA-256 fingerprinted copies and
+`public/assets/.manifest.json`. Relative JavaScript imports and CSS `url(...)`
+references are rewritten to their fingerprinted dependencies, so changing a
+dependency also changes the importing asset's URL. No Node.js runtime is
+required. Generated Dockerfiles run compilation during the image build.
+
+`Hacienda::Assets.rack_options(root: APP_ROOT)` configures logical assets with
+`Cache-Control: no-cache` and fingerprinted assets with a one-year immutable
+cache policy. Production helpers fail with an actionable error when the
+manifest or a requested entry is missing. Remove compiled outputs without
+touching sources with `bundle exec hac assets:clobber`.
+
+## Pending migrations
+
+`hac start` checks the configured database before executing Rackup and refuses
+to start with an actionable list when migrations are pending:
+
+```text
+2 pending migrations:
+  20260717090000_create_posts.rb
+  20260717090100_add_post_status.rb
+Run: bundle exec hac db:migrate
+```
+
+The generated Rack stack performs the same check for direct `rackup` use.
+Development receives a `503` page listing the pending files and recovery
+command. Production receives a generic `503` while the details are logged.
+Hacienda never applies migrations automatically at web-process boot.
+
+## Development mail
+
+Development mail is written to `tmp/mail` and is available through the local
+inbox at `/hac/mail`. The inbox lists messages, previews text, extracts links,
+shows raw source, and renders HTML inside a script- and form-disabled sandbox.
+It uses the direct socket address for its local-only gate and is unavailable in
+production.
 
 ## Navigation
 
@@ -1022,7 +1176,7 @@ The generated layout shows the complete integration:
 <%= hacienda_navigation context %>
 <body>
   <%= navigation_page content, context: context %>
-  <script type="module" src="/assets/helium-csp.js"></script>
+  <%= javascript_include "helium-csp.js", module: true %>
 </body>
 ```
 
@@ -1044,6 +1198,12 @@ unchanged nodes retain their state. If a preserved node's Helium directive
 attributes (`@...`, `:...`, or `data-he...`) change, Hacienda replaces that node
 so Helium can bind the new directives safely. Hacienda does not perform a
 Turbo-style global teardown and reinitialization.
+
+`hac new` copies the Helium runtime and license bundled with the installed
+Hacienda gem, so generation does not depend on Node.js, `node_modules`, or a
+sibling Helium checkout. Framework contributors can set `HELIUM_PATH` to an
+alternative `helium.js` for an explicit integration test; its directory must
+also contain the CSP, SSE, jexpr, and `LICENSE` files copied by the generator.
 
 Helium's Server-Sent Events support is available as an optional add-on. New
 applications vendor `helium-sse.js` and `helium-csp-sse.js` beside the default
@@ -1087,6 +1247,21 @@ npm run test:client
 npm run test:browser
 ```
 
+Framework contributors can run the complete local verification gate with:
+
+```sh
+bundle exec rake check
+```
+
+That command covers framework and package tests, every example application,
+client and browser tests, and locked Ruby and npm dependency audits. PostgreSQL
+portability contracts are explicit because they require a running server:
+
+```sh
+POSTGRES_DATABASE_URL=postgres://localhost/hacienda_test \
+  bundle exec rake test:postgresql
+```
+
 Environment-specific config lives in:
 
 ```text
@@ -1103,21 +1278,26 @@ Hacienda.env.production?
 Hacienda.logger.info "Published post"
 ```
 
-Generated apps enable code reloading in development. Action modules and route
+Generated apps enable code reloading in development. Action classes and route
 files are reloaded on each request, so adding or removing routes does not require
 a server restart while developing. Development requests are serialized around
 reload so a threaded server cannot reload constants while another request is
 using them.
 
-Actions can live together in `app/domains/posts/actions.rb` or be split into
-`app/domains/posts/actions/show.rb`-style files. Hacienda loads `actions.rb`
-first, so an inline `Posts::Show` wins if both layouts define the same action.
-Split action files are managed by Zeitwerk: each domain's `actions/` directory
-is collapsed so `app/domains/posts/actions/show.rb` maps directly to
-`Posts::Show`. On reload, Hacienda reloads inline action manifests, Zeitwerk
-unloads the managed domain generation, and Hacienda redraws the explicit route
-files. This keeps repositories, behavior modules, nested constants, actions,
-guards, and cross-domain references on the same generation.
+The default action methods live in `app/domains/posts/actions.rb` on
+`Posts::Actions < Hacienda::Actions`. Larger domains can add multi-method action
+sets under `actions/`. For example,
+`app/domains/posts/actions/publishing_actions.rb` defines
+`Posts::PublishingActions`, and a route selects it explicitly:
+
+```ruby
+post "/posts/:id/publish", :publish, actions: :publishing
+```
+
+Action-set files are managed by Zeitwerk. On reload, Zeitwerk unloads the
+managed domain generation and Hacienda redraws the explicit route files. This
+keeps repositories, behavior modules, nested constants, actions, guards, and
+cross-domain references on the same generation.
 
 Route files are intentionally ignored by Zeitwerk because they declare route
 data rather than a `Routes` constant. The ignore and action-collapse rules use
@@ -1141,6 +1321,10 @@ editing affordances, keyboard shortcuts, optimistic UI updates, and previews.
 See [`examples/workouts`](examples/workouts) for a larger AI-backed application
 with structured OpenAI responses, explicit Sequel JSON persistence, composable
 domain behaviour, and Helium-powered partial updates without Turbo.
+
+See [`examples/wills_pizza`](examples/wills_pizza) for a compact meetup workshop
+application with a public pizza menu and checkout, guarded menu management,
+explicit order construction, and immutable price snapshots.
 
 See [`docs/getting-started.md`](docs/getting-started.md) and
 [`examples/store`](examples/store) for a Rails Guides-style walkthrough and its

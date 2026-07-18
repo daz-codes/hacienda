@@ -91,4 +91,52 @@ class MailerTest < Minitest::Test
 
     assert_includes error.message, "unknown mail delivery adapter"
   end
+
+  def test_development_inbox_lists_and_safely_previews_file_deliveries
+    Hacienda.configure_mail(root: @root, delivery: :file)
+    Hacienda.mail(
+      to: "reader@example.com",
+      subject: "Sign in <now>",
+      text: "Open http://example.test/magic-login?token=secret",
+      html: %(<h1>Welcome</h1><script>alert("unsafe")</script>)
+    ).deliver
+    id = File.basename(Dir[File.join(@root, "tmp", "mail", "*.eml")].fetch(0))
+    request = Rack::MockRequest.new(
+      Hacienda::Mailer::Inbox.new(root: @root, environment: "development")
+    )
+
+    index = request.get("/", "REMOTE_ADDR" => "127.0.0.1")
+    message = request.get("/#{id}", "REMOTE_ADDR" => "127.0.0.1")
+
+    assert_equal 200, index.status
+    assert_includes index.body, "Sign in &lt;now&gt;"
+    assert_includes index.body, id
+    assert_includes index.body, %(href="/#{id}")
+    assert_equal 200, message.status
+    assert_includes message.body, "sandbox"
+    assert_includes message.body, "&lt;script&gt;alert"
+    refute_includes message.body, %(<script>alert)
+    assert_includes message.body, "http://example.test/magic-login?token=secret"
+    assert_includes message.body, "Raw message"
+    assert_includes message["content-security-policy"], "default-src 'none'"
+  end
+
+  def test_development_inbox_rejects_remote_and_invalid_message_requests
+    inbox = Hacienda::Mailer::Inbox.new(root: @root, environment: "development")
+    request = Rack::MockRequest.new(inbox)
+
+    assert_equal 403, request.get("/", "REMOTE_ADDR" => "203.0.113.10").status
+    assert_equal 404, request.get("/../config/credentials.yml.enc", "REMOTE_ADDR" => "127.0.0.1").status
+    assert_equal 404, request.get("/not-a-message.eml", "REMOTE_ADDR" => "127.0.0.1").status
+  end
+
+  def test_development_inbox_is_unavailable_in_production
+    inbox = Hacienda::Mailer::Inbox.new(
+      root: @root,
+      environment: "production",
+      authorized: ->(_request) { true }
+    )
+
+    assert_equal 404, Rack::MockRequest.new(inbox).get("/", "REMOTE_ADDR" => "127.0.0.1").status
+  end
 end

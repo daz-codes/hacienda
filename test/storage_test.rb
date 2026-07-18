@@ -66,6 +66,59 @@ class StorageTest < Minitest::Test
     end
   end
 
+  def test_content_inspector_rejects_spoofed_signatures_and_extensions
+    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    inspector = Hacienda::Storage::ContentTypeInspector.new
+
+    assert_raises(Hacienda::Storage::InvalidContent) do
+      storage.store(
+        upload_hash("not a png", filename: "image.png", type: "image/png"),
+        content_inspector: inspector
+      )
+    end
+    assert_raises(Hacienda::Storage::InvalidContent) do
+      storage.store(
+        upload_hash(png_bytes, filename: "image.txt", type: "image/png"),
+        content_inspector: inspector
+      )
+    end
+
+    blob = storage.store(
+      upload_hash(png_bytes, filename: "image.png", type: "image/png"),
+      content_inspector: inspector
+    )
+    assert_equal png_bytes, storage.read(blob.key)
+  end
+
+  def test_custom_content_inspector_can_scan_the_upload_and_rewinds_it
+    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    inspected = nil
+    inspector = lambda do |upload|
+      inspected = [upload.filename, upload.io.read]
+      true
+    end
+
+    blob = storage.store(upload_hash("safe"), content_inspector: inspector)
+
+    assert_equal ["file.txt", "safe"], inspected
+    assert_equal "safe", storage.read(blob.key)
+  end
+
+  def test_custom_content_inspector_can_reject_a_valid_header_with_active_polyglot_content
+    storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
+    signature = Hacienda::Storage::ContentTypeInspector.new
+    inspector = lambda do |upload|
+      signature.call(upload) && !upload.io.read.include?("<script")
+    end
+
+    assert_raises(Hacienda::Storage::InvalidContent) do
+      storage.store(
+        upload_hash("#{png_bytes}<script>alert(1)</script>", filename: "image.png", type: "image/png"),
+        content_inspector: inspector
+      )
+    end
+  end
+
   def test_explicit_keys_reject_traversal_and_do_not_overwrite_by_default
     storage = Hacienda::Storage.new(service: Hacienda::Storage::MemoryService.new)
     upload = upload_hash("first")
@@ -227,5 +280,9 @@ class StorageTest < Minitest::Test
       file.rewind
       @temporary_files << file
     end
+  end
+
+  def png_bytes
+    "\x89PNG\r\n\x1a\nexample png bytes".b
   end
 end

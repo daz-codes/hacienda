@@ -36,7 +36,7 @@
       <pre><code><%= samples.fetch(:generate) %></code></pre>
       <p>The REST generator creates code, not a hidden resource declaration. You
         now have a post object, repository, migration, one <code>actions.rb</code>
-        file with seven action modules, and five ERB views.</p>
+        file with seven action methods, and five ERB views.</p>
       <div class="callout"><strong>Look around.</strong> Everything needed for posts
         lives under <code>app/domains/posts</code>.</div>
     </section>
@@ -45,9 +45,10 @@
       <span class="step-number">03 / 03:30</span>
       <h2>The routes say exactly what exists</h2>
       <pre><code><%= samples.fetch(:routes) %></code></pre>
-      <p>Each symbol maps directly to a module in
-        <code>app/domains/posts/actions.rb</code>. If an action grows, move it to
-        <code>app/domains/posts/actions/show.rb</code>; the route name stays the same.
+      <p>Each symbol maps directly to a method in
+        <code>app/domains/posts/actions.rb</code>. Related actions can move to a
+        named action set under <code>app/domains/posts/actions/</code> and routes
+        select it with <code>actions: :name</code>.
         There is no controller or implicit <code>resources</code> expansion to remember.</p>
     </section>
 

@@ -21,7 +21,7 @@
 
   <article
     class="guide-content helium-cookbook"
-    @import="/assets/time_ago.js"
+    @import="<%= asset_path "time_ago.js" %>"
     @init="start_time_ago_clock($data)"
     @data='{
       "timestamp": 0,

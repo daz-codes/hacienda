@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, expect, test} from "vitest";
-import helium, {heliumTeardown} from "../../examples/blog/public/assets/helium-csp.js";
+import helium, {heliumTeardown} from "../../lib/hacienda/assets/helium-csp.js";
 
 beforeEach(() => {
   document.body.innerHTML = `

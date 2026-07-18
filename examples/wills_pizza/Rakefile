@@ -1,0 +1,45 @@
+# frozen_string_literal: true
+
+APP_ROOT = File.expand_path(__dir__) unless defined?(APP_ROOT)
+require "hacienda"
+require "rake/testtask"
+require "sequel"
+require "sequel/extensions/migration"
+
+Rake::TestTask.new do |task|
+  task.libs << "test"
+  task.pattern = "test/**/*_test.rb"
+end
+
+task default: :test
+
+namespace :db do
+  desc "Run database migrations"
+  task :migrate do
+    require_relative "config/database"
+    Sequel::Migrator.run(DB, File.join(APP_ROOT, "db", "migrations"))
+    puts "Database migrations complete."
+  end
+
+  desc "Load database seed data"
+  task seed: :migrate do
+    require_relative "config/application"
+    load File.join(APP_ROOT, "db", "seeds.rb")
+    puts "Database seed complete."
+  end
+end
+
+
+namespace :assets do
+  desc "Compile fingerprinted production assets"
+  task :precompile do
+    manifest = Hacienda::Assets.precompile(root: APP_ROOT)
+    puts "Compiled #{manifest.fetch("assets").length} assets."
+  end
+
+  desc "Remove fingerprinted production assets"
+  task :clobber do
+    count = Hacienda::Assets.clobber(root: APP_ROOT)
+    puts "Removed #{count} compiled assets and the asset manifest."
+  end
+end

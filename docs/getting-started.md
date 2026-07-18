@@ -63,17 +63,10 @@ app/domains/products/
 ├── events.rb
 ├── notify_subscribers.rb
 ├── mailer.rb
+├── actions.rb
 ├── actions/
-│   ├── index.rb
-│   ├── show.rb
-│   ├── new.rb
-│   ├── create.rb
-│   ├── edit.rb
-│   ├── update.rb
-│   ├── destroy.rb
-│   ├── subscribe.rb
-│   ├── unsubscribe.rb
-│   └── confirm_unsubscribe.rb
+│   ├── management_actions.rb
+│   └── subscription_actions.rb
 └── views/
     ├── index.erb
     ├── show.erb
@@ -98,11 +91,10 @@ Generate explicit REST code:
 bundle exec hac generate rest products
 ```
 
-This writes seven route declarations, seven action modules grouped in
-`actions.rb`, ERB templates, a plain Ruby product object, a repository, and a
-migration. Use `bundle exec hac generate rest products --split-actions` if you
-prefer one file per action from the start; the completed example uses split
-files for the larger product domain.
+This writes seven route declarations, seven methods on `Products::Actions`, ERB
+templates, a plain Ruby product object, a repository, and a migration. Larger
+groups can be generated into a separate action set with
+`hac generate action products publish --actions publishing`.
 
 The generated routes are ordinary code:
 
@@ -267,7 +259,7 @@ Products::Repository::STORE.all(scope)
 
 ## 6. Request flow: route, action, view
 
-The root and product pages map directly to `Products` action modules:
+The root and product pages map directly to methods on `Products::Actions`:
 
 ```ruby
 get "/", :index
@@ -275,17 +267,37 @@ get "/products", :index
 get "/products/:id", :show
 ```
 
-`get "/products", :index` resolves to `Products::Index`:
+`get "/products", :index` resolves to `Products::Actions#index`:
 
 ```ruby
 module Products
-  module Index
-    def self.respond(_context, _params)
+  class Actions < Hacienda::Actions
+    def index(_context, _params)
       {products: Repository.all}
     end
   end
 end
 ```
+
+The declaration belongs in `app/domains/products/routes.rb`. Its location owns
+the route, fixes the `Products` action namespace, and keeps the public request
+surface beside the behavior it exposes. Hacienda does not load a global
+business-route file. Rack middleware and infrastructure mounts belong in
+`config.ru`, so there is only one normal home for application routes.
+
+Inspect ownership or trace a concrete request with:
+
+```sh
+bundle exec hac routes --domain products
+bundle exec hac routes GET /products/42
+bundle exec hac routes /products/42
+```
+
+The final form reports the selected route for every matching HTTP verb. Boot and
+reload fail with both source locations when routes are duplicates,
+structurally equivalent, or equally specific and capable of matching the same
+request. Static routes such as `/products/new` still take precedence over
+`/products/:id`, and different verbs may intentionally share a path.
 
 Returning a Hash renders `app/domains/products/views/index.erb` and exposes its
 keys as local variables:
@@ -402,6 +414,12 @@ Views can use `context.current_user` to show management controls.
 > callbacks. Public and protected HTTP boundaries are visible together in the
 > domain route file.
 
+Guards answer whether a user may enter a route group; write a domain policy for
+record ownership and roles. Load the record first and require an explicit truthy
+decision. Missing records, users, roles, and policy failures should return
+`403`/`404`, never fall through to the mutation. Integration tests should cover
+an owner, a different authenticated user, and an anonymous request.
+
 ## 9. Fragment caching
 
 Cache product-card HTML using a versioned product key:
@@ -452,7 +470,8 @@ blob = context.storage.store(
   params[:featured_image],
   prefix: "product-images",
   max_bytes: 5 * 1024 * 1024,
-  content_types: ["image/jpeg", "image/png", "image/webp", "image/avif"]
+  content_types: ["image/jpeg", "image/png", "image/webp", "image/avif"],
+  content_inspector: Hacienda::Storage::ContentTypeInspector.new
 )
 product.attach_featured_image(blob)
 ```
@@ -597,7 +616,10 @@ Hacienda.mail(
 ```
 
 Development writes `.eml` files to `tmp/mail`; tests collect deliveries in
-memory; production uses SMTP and durable database jobs.
+memory; production uses SMTP and durable database jobs. During development,
+open `/hac/mail` to inspect delivered messages and follow verification, reset,
+or magic-login links. HTML messages render in a restricted sandbox and remote
+resources are disabled.
 
 Generate an expiring signed unsubscribe token:
 
@@ -649,10 +671,11 @@ document.addEventListener("submit", (event) => {
 });
 ```
 
-> **Current gap — asset pipeline:** Hacienda serves explicit static files and
-> requires no Node.js. It does not currently fingerprint, bundle, transpile, or
-> build import maps like Propshaft/importmap-rails. Cache-busting production
-> assets require an application or deployment convention.
+> **Hacienda difference:** Hacienda fingerprints static assets, rewrites local
+> CSS and JavaScript dependencies, and generates a production manifest without
+> Node.js. It deliberately does not bundle, transpile, or compile source tools
+> such as Tailwind; those tools write their output into `public/assets` before
+> `hac assets:precompile` fingerprints it.
 
 > **Hacienda difference:** Native POST/PATCH/DELETE forms perform full browser
 > submissions. Navigation only accelerates GET transitions; Hacienda does not
@@ -663,6 +686,30 @@ document.addEventListener("submit", (event) => {
 
 Generated applications include Minitest, Rack::Test, automatic test migrations,
 and the complete middleware stack.
+
+Test paths mirror the domain layout without putting tests under `app/domains`,
+which keeps them outside Zeitwerk's production autoload tree:
+
+```text
+test/domains/products/product_test.rb
+test/domains/products/repository_test.rb
+test/domains/products/actions_test.rb
+test/domains/auth/user_test.rb
+test/domains/auth/actions_test.rb
+test/integration/purchase_workflow_test.rb
+```
+
+Plain objects are tested directly with `Minitest::Test`. Repository contracts
+use the isolated test database and explicit setup. Focused HTTP behavior for one
+domain belongs in its `actions_test.rb` and can subclass `ApplicationTest`.
+Cross-domain workflows, such as authentication followed by purchasing and mail
+delivery, belong in `test/integration`. Name those files after the customer
+story rather than after a single implementation class.
+
+`hac generate domain` creates the mirrored directory. Action generation adds a
+direct action contract, REST generation adds object, repository, and HTTP action
+tests, and authentication generation adds user-policy and signup contracts.
+Each generated assertion describes behavior that can be retained and extended.
 
 The store integration test creates explicit records rather than fixtures:
 

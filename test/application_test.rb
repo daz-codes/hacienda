@@ -7,6 +7,8 @@ require "stringio"
 
 class ApplicationTest < Minitest::Test
   def setup
+    @previous_environment = Hacienda.env.to_s
+    @previous_root = Hacienda.root
     Hacienda.env = "test"
     Hacienda.configure_logger(output: File::NULL, level: :warn)
     @root = Dir.mktmpdir("hacienda-app")
@@ -24,49 +26,29 @@ class ApplicationTest < Minitest::Test
         get "/posts/:id/edit", :edit
       end
     RUBY
-    write "app/domains/posts/actions/show.rb", <<~RUBY
+    write "app/domains/posts/actions.rb", <<~RUBY
       module Posts
-        module Show
-          def self.respond(_context, params)
+        class Actions < Hacienda::Actions
+          LAST_MODIFIED = Time.utc(2026, 6, 28, 12, 0, 0)
+
+          def show(_context, params)
             {post: {id: params[:id], title: "Explicit Ruby"}}
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/boom.rb", <<~RUBY
-      module Posts
-        module Boom
-          def self.respond(_context, _params)
+
+          def boom(_context, _params)
             raise "Exploded"
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/busy.rb", <<~RUBY
-      module Posts
-        module Busy
-          def self.respond(_context, _params)
+
+          def busy(_context, _params)
             raise Sequel::DatabaseError, "SQLite3::BusyException: database is locked"
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/full_load.rb", <<~RUBY
-      module Posts
-        module FullLoad
-          def self.respond(context, _params)
+
+          def full_load(context, _params)
             context.navigation_reload!
             {title: "Full load"}
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/cached.rb", <<~RUBY
-      module Posts
-        module Cached
-          LAST_MODIFIED = Time.utc(2026, 6, 28, 12, 0, 0)
 
-          def self.respond(context, params)
+          def cached(context, params)
             stale = context.stale?(
               etag: ["post", params[:id], LAST_MODIFIED.to_i],
               last_modified: LAST_MODIFIED,
@@ -77,54 +59,29 @@ class ApplicationTest < Minitest::Test
 
             {post: {id: params[:id], title: "Cached post"}}
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/new.rb", <<~RUBY
-      module Posts
-        module New
-          def self.respond(_context, _params)
+
+          def new(_context, _params)
             render :new, title: "New post"
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/create.rb", <<~RUBY
-      module Posts
-        module Create
-          def self.respond(context, _params)
+
+          def create(context, _params)
             context.flash[:notice] = "Post created."
             redirect "/posts/1"
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/require_post.rb", <<~RUBY
-      module Posts
-        module RequirePost
-          def self.respond(_context, params)
+
+          def require_post(_context, params)
             params.require(:post)
             "OK"
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/echo.rb", <<~RUBY
-      module Posts
-        module Echo
-          def self.respond(context, params)
+
+          def echo(context, params)
             json(
               {params: params.to_h, raw_body: context.request.body.read},
               status: 200
             )
           end
-        end
-      end
-    RUBY
-    write "app/domains/posts/actions/edit.rb", <<~RUBY
-      module Posts
-        module Edit
-          def self.respond(context, params)
+
+          def edit(context, params)
             {title: "Editing \#{params[:id]} as \#{context.current_user}"}
           end
         end
@@ -172,10 +129,11 @@ class ApplicationTest < Minitest::Test
 
   def teardown
     Hacienda::SQLite.busy_monitor = nil
-    @app.__send__(:unload_inline_actions)
     @app.loader.unload
     @app.loader.unregister
     FileUtils.rm_rf(@root)
+    Hacienda.root = @previous_root if @previous_root
+    Hacienda.env = @previous_environment
   end
 
   def test_hash_result_renders_matching_view_with_layout_and_components
@@ -254,8 +212,8 @@ class ApplicationTest < Minitest::Test
     write "app/domains/comments/routes.rb", %(get "/comments", :index\n)
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        module Index
-          def self.respond(_context, _params)
+        class Actions < Hacienda::Actions
+          def index(_context, _params)
             "Inline comments"
           end
         end
@@ -267,30 +225,90 @@ class ApplicationTest < Minitest::Test
     assert_equal "Inline comments", response.body
   end
 
-  def test_inline_actions_take_precedence_over_split_action_files
+  def test_action_sets_use_a_fresh_instance_for_each_request
     write "app/domains/comments/routes.rb", %(get "/comments", :index\n)
     write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        module Index
-          def self.respond(_context, _params)
-            "Inline comments"
+        class Actions < Hacienda::Actions
+          def index(_context, _params)
+            @calls = @calls.to_i + 1
+            @calls.to_s
           end
         end
       end
     RUBY
-    write "app/domains/comments/actions/index.rb", <<~RUBY
-      module Comments
-        module Index
-          def self.respond(_context, _params)
-            "Split comments"
-          end
-        end
-      end
-    RUBY
-    response = Rack::MockRequest.new(@app).get("/comments")
+    request = Rack::MockRequest.new(@app)
 
-    assert_equal 200, response.status
-    assert_equal "Inline comments", response.body
+    assert_equal "1", request.get("/comments").body
+    assert_equal "1", request.get("/comments").body
+  end
+
+  def test_action_set_does_not_dispatch_inherited_object_methods
+    write "app/domains/comments/routes.rb", %(get "/comments", :inspect\n)
+    write "app/domains/comments/actions.rb", <<~RUBY
+      module Comments
+        class Actions < Hacienda::Actions
+          def index(_context, _params) = "Index"
+        end
+      end
+    RUBY
+
+    assert_equal 404, Rack::MockRequest.new(@app).get("/comments").status
+  end
+
+  def test_reserved_response_helper_names_fail_during_reload
+    write "app/domains/comments/routes.rb", %(get "/comments", :render\n)
+    write "app/domains/comments/actions.rb", <<~RUBY
+      module Comments
+        class Actions < Hacienda::Actions
+          def render(_context, _params) = "Ambiguous"
+        end
+      end
+    RUBY
+
+    error = assert_raises(Hacienda::Error) { @app.reload! }
+    assert_includes error.message, "reserved action name :render"
+  end
+
+  def test_private_reserved_names_fail_during_reload
+    write "app/domains/comments/actions.rb", <<~RUBY
+      module Comments
+        class Actions < Hacienda::Actions
+          private
+
+          def initialize
+          end
+        end
+      end
+    RUBY
+
+    error = assert_raises(Hacienda::Error) { @app.reload! }
+    assert_includes error.message, "reserved action name :initialize"
+  end
+
+  def test_routes_can_select_an_additional_multi_method_action_set
+    write "app/domains/comments/routes.rb", <<~RUBY
+      post "/comments/:id/publish", :publish, actions: :moderation
+      post "/comments/:id/archive", :archive, actions: :moderation
+    RUBY
+    write "app/domains/comments/actions.rb", <<~RUBY
+      module Comments
+        class Actions < Hacienda::Actions
+        end
+      end
+    RUBY
+    write "app/domains/comments/actions/moderation_actions.rb", <<~RUBY
+      module Comments
+        class ModerationActions < Hacienda::Actions
+          def publish(_context, params) = "Published \#{params[:id]}"
+          def archive(_context, params) = "Archived \#{params[:id]}"
+        end
+      end
+    RUBY
+    request = Rack::MockRequest.new(@app)
+
+    assert_equal "Published 7", request.post("/comments/7/publish").body
+    assert_equal "Archived 8", request.post("/comments/8/archive").body
   end
 
   def test_explicit_render_uses_configured_layout_by_default
@@ -309,29 +327,29 @@ class ApplicationTest < Minitest::Test
     refute_includes stderr, "method redefined"
   end
 
-  def test_zeitwerk_manages_actions_in_the_domain_namespace
-    action = File.join(@root, "app/domains/posts/actions/show.rb")
+  def test_zeitwerk_manages_action_sets_in_the_domain_namespace
+    action = File.join(@root, "app/domains/posts/actions.rb")
     routes = File.join(@root, "app/domains/posts/routes.rb")
 
-    assert_equal "Posts::Show", @app.loader.cpath_expected_at(action)
+    assert_equal "Posts::Actions", @app.loader.cpath_expected_at(action)
     assert_nil @app.loader.cpath_expected_at(routes)
 
     Rack::MockRequest.new(@app).get("/posts/1")
 
-    assert_includes Posts::Show.singleton_class.ancestors, Hacienda::Responses
+    assert_operator Posts::Actions, :<, Hacienda::Actions
   end
 
-  def test_reload_replaces_action_modules_and_their_nested_constants
+  def test_reload_replaces_action_sets_and_their_nested_constants
     request = Rack::MockRequest.new(@app)
     request.get("/posts/1")
-    previous_action = Posts::Show
+    previous_action = Posts::Actions
 
-    write "app/domains/posts/actions/show.rb", <<~RUBY
+    write "app/domains/posts/actions.rb", <<~RUBY
       module Posts
-        module Show
+        class Actions < Hacienda::Actions
           FORMAT = "Reloaded"
 
-          def self.respond(_context, params)
+          def show(_context, params)
             {post: {id: params[:id], title: "\#{FORMAT} action"}}
           end
         end
@@ -340,8 +358,8 @@ class ApplicationTest < Minitest::Test
 
     response = request.get("/posts/1")
 
-    refute_same previous_action, Posts::Show
-    assert_equal "Reloaded", Posts::Show::FORMAT
+    refute_same previous_action, Posts::Actions
+    assert_equal "Reloaded", Posts::Actions::FORMAT
     assert_includes response.body, "Reloaded action"
   end
 
@@ -364,10 +382,10 @@ class ApplicationTest < Minitest::Test
         end
       end
     RUBY
-    write "app/domains/posts/actions/greeting.rb", <<~RUBY
+    write "app/domains/posts/actions.rb", <<~RUBY
       module Posts
-        module Greeting
-          def self.respond(_context, _params) = Presentation.text
+        class Actions < Hacienda::Actions
+          def greeting(_context, _params) = Presentation.text
         end
       end
     RUBY
@@ -392,10 +410,10 @@ class ApplicationTest < Minitest::Test
 
   def test_reload_discovers_new_domains_and_ignores_their_route_files
     write "app/domains/comments/routes.rb", %(get "/comments", :index\n)
-    write "app/domains/comments/actions/index.rb", <<~RUBY
+    write "app/domains/comments/actions.rb", <<~RUBY
       module Comments
-        module Index
-          def self.respond(_context, _params) = "Comments"
+        class Actions < Hacienda::Actions
+          def index(_context, _params) = "Comments"
         end
       end
     RUBY
@@ -404,15 +422,15 @@ class ApplicationTest < Minitest::Test
 
     assert_equal 200, response.status
     assert_equal "Comments", response.body
-    assert_equal "Comments::Index", @app.loader.cpath_expected_at(
-      File.join(@root, "app/domains/comments/actions/index.rb")
+    assert_equal "Comments::Actions", @app.loader.cpath_expected_at(
+      File.join(@root, "app/domains/comments/actions.rb")
     )
     assert_nil @app.loader.cpath_expected_at(
       File.join(@root, "app/domains/comments/routes.rb")
     )
   end
 
-  def test_route_with_missing_action_file_returns_not_found
+  def test_route_with_missing_action_method_returns_not_found
     routes = File.read(File.join(@root, "app/domains/posts/routes.rb"))
     write "app/domains/posts/routes.rb", routes + %(get "/missing-action", :missing\n)
 
@@ -431,10 +449,10 @@ class ApplicationTest < Minitest::Test
         get "/posts/:id/edit", :edit
       end
     RUBY
-    write "app/domains/posts/actions/health.rb", <<~RUBY
+    write "app/domains/posts/actions.rb", <<~RUBY
       module Posts
-        module Health
-          def self.respond(_context, _params)
+        class Actions < Hacienda::Actions
+          def health(_context, _params)
             "OK"
           end
         end
@@ -453,6 +471,26 @@ class ApplicationTest < Minitest::Test
     RUBY
 
     assert_equal 404, Rack::MockRequest.new(@app).get("/health").status
+  end
+
+  def test_reload_rejects_cross_domain_route_collisions_and_recovers_after_they_are_fixed
+    write "app/domains/comments/routes.rb", %(get "/posts/:slug", :show\n)
+    write "app/domains/comments/actions.rb", <<~RUBY
+      module Comments
+        class Actions < Hacienda::Actions
+          def show(_context, params) = "Comment \#{params[:slug]}"
+        end
+      end
+    RUBY
+
+    error = assert_raises(Hacienda::Routes::CollisionError) { @app.reload! }
+    assert_includes error.message, "Posts::Actions#show"
+    assert_includes error.message, "Comments::Actions#show"
+
+    write "app/domains/comments/routes.rb", %(get "/comments/:slug", :show\n)
+    @app.reload!
+
+    assert_equal "Comment first", Rack::MockRequest.new(@app).get("/comments/first").body
   end
 
   def test_static_route_wins_over_parameter_route

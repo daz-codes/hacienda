@@ -236,7 +236,7 @@ module Hacienda
       end
 
       def asset_path(source)
-        "/assets/#{source.to_s.delete_prefix("/")}"
+        Assets.path(source)
       end
 
       def stylesheet_link(source, media: nil, nonce: false, context: nil)

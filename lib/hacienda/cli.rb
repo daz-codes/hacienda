@@ -36,11 +36,11 @@ module Hacienda
       when "credentials:rotate"
         credentials_rotate
       when "start"
-        run_server(rest)
+        return run_server(rest)
       when "console", "c"
         run_console
       when "routes"
-        list_routes
+        return list_routes(rest)
       when "db:migrate"
         migrate_database(rest)
       when "db:rollback"
@@ -51,6 +51,10 @@ module Hacienda
         return check_database(rest)
       when "db:checkpoint"
         checkpoint_database(rest)
+      when "assets:precompile"
+        precompile_assets(rest)
+      when "assets:clobber"
+        clobber_assets(rest)
       when "jobs:work"
         work_jobs(rest)
       when "jobs:failed"
@@ -103,9 +107,18 @@ module Hacienda
       config = File.join(@cwd, "config.ru")
       raise ArgumentError, "not a Hacienda application: #{@cwd}" unless File.file?(config)
 
+      pending = pending_application_migrations
+      unless pending.empty?
+        @err.puts "#{pending.length} pending #{pluralize(pending.length, "migration")}:"
+        pending.each { |path| @err.puts "  #{File.basename(path)}" }
+        @err.puts "Run: bundle exec hac db:migrate"
+        return 1
+      end
+
       rackup_arguments = arguments.dup
       rackup_arguments.unshift("-p", "5151") unless port_argument?(rackup_arguments)
       @executor.call(Gem.ruby, "-S", "rackup", *rackup_arguments)
+      0
     end
 
     def run_console
@@ -124,25 +137,81 @@ module Hacienda
       end
     end
 
-    def list_routes
+    def list_routes(arguments)
+      arguments = arguments.dup
+      domain = consume_option!(arguments, "--domain")
+      reject_unknown_options!("hac routes [METHOD] [PATH] [--domain DOMAIN]", arguments)
       application = load_application
-      routes = application.routes.entries.sort_by(&:order)
+      routes = if arguments.empty?
+        application.routes.entries.sort_by(&:order)
+      else
+        lookup_routes(application.routes, arguments)
+      end
+      routes = routes.select { |route| route.domain_name == domain } if domain
 
       if routes.empty?
-        @out.puts "No routes defined."
-        return
+        message = if arguments.empty? && domain
+          "No routes defined for domain #{domain.inspect}."
+        elsif arguments.empty?
+          "No routes defined."
+        else
+          request = arguments.length == 2 ? "#{arguments.first.upcase} #{arguments.last}" : arguments.first
+          "No route matches #{request}#{" in domain #{domain.inspect}" if domain}."
+        end
+        @out.puts message
+        return arguments.empty? ? 0 : 1
       end
 
       rows = routes.map do |route|
         [
           route.verb,
           route.path,
-          route.action_module_name,
-          route.guards.empty? ? "-" : route.guards.map { |guard| guard_name(guard) }.join(", ")
+          route.domain_name,
+          route.action_handler_name,
+          route.guards.empty? ? "-" : route.guards.map { |guard| guard_name(guard) }.join(", "),
+          route_source(route)
         ]
       end
 
-      print_table([%w[VERB PATH ACTION GUARDS], *rows])
+      print_table([%w[VERB PATH DOMAIN ACTION GUARDS SOURCE], *rows])
+      0
+    end
+
+    def lookup_routes(routes, arguments)
+      method, path = case arguments.length
+      when 1
+        [nil, arguments.first]
+      when 2
+        [arguments.first.to_s.upcase, arguments.last]
+      else
+        raise ArgumentError, "usage: hac routes [METHOD] PATH [--domain DOMAIN]"
+      end
+
+      unless path.to_s.start_with?("/")
+        raise ArgumentError, "route lookup path must start with /: #{path.inspect}"
+      end
+      if method && !(["HEAD"] + Routes::VERBS.map { |verb| verb.to_s.upcase }).include?(method)
+        raise ArgumentError, "unsupported route method: #{method.inspect}"
+      end
+
+      if method
+        match = routes.find(method, path)
+        match ? [match.first] : []
+      else
+        routes.entries.map(&:verb).uniq.filter_map do |verb|
+          routes.find(verb, path)&.first
+        end.sort_by(&:order)
+      end
+    end
+
+    def route_source(route)
+      return "-" unless route.source_file
+
+      root = File.realpath(@cwd)
+      source = File.realpath(route.source_file).delete_prefix("#{root}/")
+      route.source_line ? "#{source}:#{route.source_line}" : source
+    rescue SystemCallError
+      route.source_location
     end
 
     def migrate_database(arguments)
@@ -241,6 +310,21 @@ module Hacienda
         ["MODE", "BUSY", "LOG_FRAMES", "CHECKPOINTED_FRAMES"],
         [result.fetch(:mode), result.fetch(:busy), result.fetch(:log), result.fetch(:checkpointed)]
       ])
+    end
+
+    def precompile_assets(arguments)
+      expect_no_arguments!("assets:precompile", arguments)
+      ensure_application!
+      manifest = Assets.precompile(root: @cwd)
+      count = manifest.fetch("assets").length
+      @out.puts "Compiled #{count} #{pluralize(count, "asset")}."
+    end
+
+    def clobber_assets(arguments)
+      expect_no_arguments!("assets:clobber", arguments)
+      ensure_application!
+      count = Assets.clobber(root: @cwd)
+      @out.puts "Removed #{count} compiled #{pluralize(count, "asset")} and the asset manifest."
     end
 
     def work_jobs(arguments)
@@ -884,6 +968,15 @@ module Hacienda
       directory
     end
 
+    def pending_application_migrations
+      application_config = File.join(@cwd, "config", "application.rb")
+      directory = File.join(@cwd, "db", "migrations")
+      return [] unless File.file?(application_config) && File.directory?(directory)
+
+      application = load_application
+      Migrations.pending(database: application_database(application), directory:)
+    end
+
     def migration_files(directory)
       Dir[File.join(directory, "*.rb")].select do |path|
         Sequel::Migrator::MIGRATION_FILE_PATTERN.match?(File.basename(path))
@@ -999,20 +1092,14 @@ module Hacienda
       when "domain"
         generator.generate_domain(names.fetch(0) { raise ArgumentError, "usage: hac generate domain NAME" })
       when "rest"
-        split_actions = consume_flag!(names, "--split-actions", "--split")
-        reject_unknown_options!("hac generate rest NAME [--split-actions]", names)
-        generator.generate_rest(
-          names.fetch(0) { raise ArgumentError, "usage: hac generate rest NAME [--split-actions]" },
-          split_actions:
-        )
+        reject_unknown_options!("hac generate rest NAME", names)
+        generator.generate_rest(names.fetch(0) { raise ArgumentError, "usage: hac generate rest NAME" })
       when "action"
-        inline = consume_flag!(names, "--inline", "--inline-action")
-        split = consume_flag!(names, "--split", "--split-action")
-        raise ArgumentError, "choose either --inline or --split" if inline && split
-        reject_unknown_options!("hac generate action DOMAIN NAME [--inline]", names)
+        group = consume_option!(names, "--actions", "--group")
+        reject_unknown_options!("hac generate action DOMAIN NAME [--actions GROUP]", names)
         domain = names.fetch(0) { raise ArgumentError, "usage: hac generate action DOMAIN NAME" }
         action = names.fetch(1) { raise ArgumentError, "usage: hac generate action DOMAIN NAME" }
-        generator.generate_action(domain, action, inline:)
+        generator.generate_action(domain, action, group:)
       when "migration"
         generator.generate_migration(names.fetch(0) { raise ArgumentError, "usage: hac generate migration NAME" })
       when "auth"
@@ -1024,15 +1111,17 @@ module Hacienda
       @out.puts "Generated #{destination}"
     end
 
-    def consume_flag!(arguments, *flags)
-      found = false
+    def consume_option!(arguments, *flags)
       flags.each do |flag|
-        while (index = arguments.index(flag))
-          arguments.delete_at(index)
-          found = true
-        end
+        index = arguments.index(flag)
+        next unless index
+
+        value = arguments[index + 1]
+        raise ArgumentError, "#{flag} requires a value" if value.nil? || value.start_with?("-")
+        arguments.slice!(index, 2)
+        return value
       end
-      found
+      nil
     end
 
     def reject_unknown_options!(usage, arguments)
@@ -1062,8 +1151,8 @@ module Hacienda
         Usage:
           hac new APP_NAME
           hac generate domain NAME
-          hac generate rest NAME [--split-actions]
-          hac generate action DOMAIN NAME [--inline]
+          hac generate rest NAME
+          hac generate action DOMAIN NAME [--actions GROUP]
           hac generate migration NAME
           hac generate auth
           hac credentials:show
@@ -1071,12 +1160,15 @@ module Hacienda
           hac credentials:rotate
           hac start [RACKUP_OPTIONS]
           hac console
-          hac routes
+          hac routes [--domain DOMAIN]
+          hac routes [METHOD] PATH [--domain DOMAIN]
           hac db:migrate
           hac db:rollback [STEPS]
           hac db:seed
           hac db:check
           hac db:checkpoint [--mode PASSIVE|FULL|RESTART|TRUNCATE]
+          hac assets:precompile
+          hac assets:clobber
           hac jobs:work [--once] [--queue NAME|--all-queues] [--threads N] [--batch-size N] [--poll SECONDS]
           hac jobs:status
           hac jobs:health

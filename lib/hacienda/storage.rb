@@ -12,12 +12,49 @@ module Hacienda
     class InvalidUpload < Error; end
     class TooLarge < InvalidUpload; end
     class UnsupportedType < InvalidUpload; end
+    class InvalidContent < InvalidUpload; end
     class InvalidKey < Error; end
     class AlreadyExists < Error; end
     class Unavailable < Error; end
     class NotFound < Hacienda::NotFound; end
 
     Blob = Data.define(:key, :filename, :content_type, :byte_size, :checksum, :url)
+
+    class ContentTypeInspector
+      SIGNATURES = {
+        "image/png" => ->(bytes) { bytes.start_with?("\x89PNG\r\n\x1a\n".b) },
+        "image/jpeg" => ->(bytes) { bytes.start_with?("\xff\xd8\xff".b) },
+        "image/gif" => ->(bytes) { bytes.start_with?("GIF87a".b) || bytes.start_with?("GIF89a".b) },
+        "image/webp" => ->(bytes) { bytes.start_with?("RIFF".b) && bytes.byteslice(8, 4) == "WEBP".b },
+        "image/avif" => ->(bytes) { %w[avif avis].include?(bytes.byteslice(8, 4)) && bytes.byteslice(4, 4) == "ftyp".b },
+        "application/pdf" => ->(bytes) { bytes.start_with?("%PDF-".b) },
+        "application/zip" => ->(bytes) {
+          ["PK\x03\x04".b, "PK\x05\x06".b, "PK\x07\x08".b].any? { |signature| bytes.start_with?(signature) }
+        }
+      }.freeze
+      EXTENSIONS = {
+        "image/png" => %w[.png],
+        "image/jpeg" => %w[.jpg .jpeg .jpe],
+        "image/gif" => %w[.gif],
+        "image/webp" => %w[.webp],
+        "image/avif" => %w[.avif],
+        "application/pdf" => %w[.pdf],
+        "application/zip" => %w[.zip]
+      }.freeze
+
+      def initialize(check_extension: true, allow_unrecognized: false)
+        @check_extension = check_extension
+        @allow_unrecognized = allow_unrecognized
+      end
+
+      def call(upload)
+        signature = SIGNATURES[upload.content_type]
+        return @allow_unrecognized unless signature
+        return false if @check_extension && !EXTENSIONS.fetch(upload.content_type).include?(File.extname(upload.filename).downcase)
+
+        signature.call(upload.read_prefix(32))
+      end
+    end
 
     class Upload
       attr_reader :io, :filename, :content_type, :byte_size
@@ -65,7 +102,7 @@ module Hacienda
         @byte_size = measure
       end
 
-      def validate!(max_bytes: nil, content_types: nil)
+      def validate!(max_bytes: nil, content_types: nil, content_inspector: nil)
         if max_bytes
           limit = Integer(max_bytes)
           raise ArgumentError, "max_bytes must be positive" unless limit.positive?
@@ -77,7 +114,19 @@ module Hacienda
           raise UnsupportedType, "upload content type #{content_type.inspect} is not allowed"
         end
 
+        inspect_content!(content_inspector) if content_inspector
+
         self
+      end
+
+      def read_prefix(max_bytes)
+        limit = Integer(max_bytes)
+        raise ArgumentError, "max_bytes must be positive" unless limit.positive?
+
+        io.rewind
+        io.read(limit).to_s.b
+      ensure
+        io.rewind
       end
 
       def checksum
@@ -92,6 +141,17 @@ module Hacienda
       end
 
       private
+
+      def inspect_content!(inspector)
+        unless inspector.respond_to?(:call)
+          raise ArgumentError, "content_inspector must respond to call"
+        end
+
+        accepted = inspector.call(self)
+        raise InvalidContent, "upload content does not match its declared type" unless accepted
+      ensure
+        io.rewind
+      end
 
       def sanitize_filename(value)
         filename = value.to_s.encode("UTF-8", invalid: :replace, undef: :replace, replace: "")
@@ -293,8 +353,8 @@ module Hacienda
       end
     end
 
-    def store(value, key: nil, prefix: nil, max_bytes: nil, content_types: nil, overwrite: false)
-      upload = Upload.wrap(value).validate!(max_bytes:, content_types:)
+    def store(value, key: nil, prefix: nil, max_bytes: nil, content_types: nil, content_inspector: nil, overwrite: false)
+      upload = Upload.wrap(value).validate!(max_bytes:, content_types:, content_inspector:)
       key = key ? self.class.validate_key!(key) : generated_key(upload, prefix:)
       checksum = upload.checksum
       service.write(key, upload.io, overwrite:)

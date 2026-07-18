@@ -2,26 +2,20 @@
 # frozen_string_literal: true
 
 module Posts
-  module Index
-    def self.respond(_context, params)
+  class Actions < Hacienda::Actions
+    def index(_context, params)
       {posts: Repository.all}
     end
-  end
 
-  module Show
-    def self.respond(_context, params)
+    def show(_context, params)
       {post: Repository.find(params[:id])}
     end
-  end
 
-  module New
-    def self.respond(_context, params)
+    def new(_context, params)
       {post: Post.new, errors: []}
     end
-  end
 
-  module Create
-    def self.respond(context, params)
+    def create(context, params)
       attributes = params.permit(:title, :body).transform_values { |value| value.to_s.strip }
       post = Post.new(
         title: attributes[:title],
@@ -33,16 +27,12 @@ module Posts
       context.flash[:notice] = "Post created."
       redirect "/posts/#{post.id}"
     end
-  end
 
-  module Edit
-    def self.respond(_context, params)
+    def edit(_context, params)
       {post: Repository.find(params[:id]), errors: []}
     end
-  end
 
-  module Update
-    def self.respond(context, params)
+    def update(context, params)
       post = Repository.find(params[:id])
       attributes = params.permit(:title, :body).transform_values { |value| value.to_s.strip }
       post.title = attributes[:title]
@@ -53,10 +43,8 @@ module Posts
       context.flash[:notice] = "Post updated."
       redirect "/posts/#{post.id}"
     end
-  end
 
-  module Destroy
-    def self.respond(context, params)
+    def destroy(context, params)
       post = Repository.find(params[:id])
       Repository.delete(post)
       context.flash[:notice] = "Post deleted."
@@ -177,5 +165,75 @@ Sequel.migration do
       DateTime :created_at, null: false
       DateTime :updated_at, null: false
     end
+  end
+end
+
+===== test/domains/posts/actions_test.rb =====
+# frozen_string_literal: true
+
+require_relative "../../test_helper"
+
+class PostsActionsTest < ApplicationTest
+  def setup
+    super
+    database[:posts].delete
+  end
+
+  def test_create_redirects_to_the_persisted_record
+    post "/posts", {
+      _csrf: csrf_token,
+      title: "Created through HTTP",
+      body: "Domain action contract"
+    }
+
+    assert_equal 303, last_response.status
+    record = database[:posts].first
+    assert_equal "/posts/#{record[:id]}", last_response["location"]
+
+    get last_response["location"]
+    assert_equal 200, last_response.status
+    assert_includes last_response.body, "Created through HTTP"
+  end
+end
+
+===== test/domains/posts/post_test.rb =====
+# frozen_string_literal: true
+
+require_relative "../../test_helper"
+
+class PostsPostTest < Minitest::Test
+  def test_title_and_body_are_required
+    record = Posts::Post.new
+
+    refute record.valid?
+    assert_includes record.errors.full_messages, "Title is required"
+    assert_includes record.errors.full_messages, "Body is required"
+  end
+
+  def test_complete_record_is_valid
+    record = Posts::Post.new(title: "First", body: "Useful body")
+
+    assert record.valid?
+  end
+end
+
+===== test/domains/posts/repository_test.rb =====
+# frozen_string_literal: true
+
+require_relative "../../test_helper"
+
+class PostsRepositoryTest < Minitest::Test
+  def setup
+    APP.database[:posts].delete
+  end
+
+  def test_saved_records_can_be_found
+    record = Posts::Post.new(title: "Saved", body: "Repository contract")
+
+    Posts::Repository.save(record)
+    found = Posts::Repository.find(record.id)
+
+    assert_equal record.id, found.id
+    assert_equal "Saved", found.title
   end
 end

@@ -17,11 +17,18 @@ module Hacienda
         env = request.env
         return env[REQUEST_DATA_KEY] if env.key?(REQUEST_DATA_KEY)
 
-        env[REQUEST_DATA_KEY] = if json_request?(request)
+        data = if json_request?(request)
           request.GET.merge(parse_json_body(request))
         else
           request.params
         end
+        limits = env[Middleware::RequestLimits::LIMITS_ENV]
+        Middleware::RequestLimits.validate_parameters!(data, limits) if limits
+        env[REQUEST_DATA_KEY] = data
+      rescue StandardError => error
+        raise unless error.class.ancestors.include?(Rack::BadRequest)
+
+        raise BadRequest, "malformed request parameters"
       end
 
       private

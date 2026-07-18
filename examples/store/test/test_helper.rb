@@ -8,9 +8,21 @@ require "rack"
 require "rack/test"
 require "sequel"
 require "sequel/extensions/migration"
+require "tmpdir"
+require "fileutils"
 
 TEST_ROOT = File.expand_path("..", __dir__) unless defined?(TEST_ROOT)
+test_database_directory = unless ENV["DATABASE_URL"]
+  Dir.mktmpdir("hacienda-store-test").tap do |directory|
+    ENV["DATABASE_URL"] = "sqlite://#{File.join(directory, "test.sqlite3")}"
+  end
+end
 TEST_APP = Rack::Builder.parse_file(File.join(TEST_ROOT, "config.ru")) unless defined?(TEST_APP)
+
+Minitest.after_run do
+  APP.database&.disconnect
+  FileUtils.rm_rf(test_database_directory) if test_database_directory
+end
 
 migrations = File.join(TEST_ROOT, "db", "migrations")
 if Dir[File.join(migrations, "*.rb")].any?

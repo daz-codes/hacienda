@@ -1,0 +1,7 @@
+<% page_title "Add a pizza" %>
+
+<section class="form-page">
+  <p class="eyebrow">Menu management</p>
+  <h1>Add a pizza</h1>
+  <%= partial :form, pizza:, errors:, action: "/pizzas", method: "post", submit_label: "Add to menu" %>
+</section>

@@ -1,0 +1,26 @@
+<% page_title "Order #{order.number}" %>
+
+<section class="confirmation-page">
+  <p class="confirmation-mark" aria-hidden="true">&#10003;</p>
+  <p class="eyebrow">Order received</p>
+  <h1>Thanks, <%= order.customer_name %>.</h1>
+  <p>We'll send updates to <strong><%= order.email %></strong>.</p>
+
+  <dl class="order-summary">
+    <div><dt>Order</dt><dd><%= order.number %></dd></div>
+    <% order.line_items.each do |item| %>
+      <div>
+        <dt><%= item.quantity %> &times; <%= item.pizza_name %></dt>
+        <dd>&pound;<%= item.total %></dd>
+      </div>
+    <% end %>
+    <div class="order-total"><dt>Total</dt><dd>&pound;<%= order.total %></dd></div>
+  </dl>
+
+  <div class="delivery-address">
+    <h2>Deliver to</h2>
+    <p><%= order.delivery_address %></p>
+  </div>
+
+  <%= link "Back to the menu", "/pizzas", class: "button button-secondary" %>
+</section>

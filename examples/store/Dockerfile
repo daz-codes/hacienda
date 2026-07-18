@@ -26,6 +26,7 @@ RUN bundle install && \
     rm -rf /usr/local/bundle/cache /usr/local/bundle/ruby/*/cache
 
 COPY . .
+RUN bundle exec hac assets:precompile
 
 FROM base
 

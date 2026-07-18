@@ -3,7 +3,7 @@
   method="post"
   action="<%= editing ? "/workouts/#{workout.id}" : "/workouts" %>"
   data-helium
-  @import="/assets/workouts.js"
+  @import="<%= asset_path "workouts.js" %>"
   @data='<%= {
     activity: workout.activity,
     notes: workout.training_notes,

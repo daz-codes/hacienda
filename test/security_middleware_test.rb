@@ -3,6 +3,122 @@
 require_relative "test_helper"
 
 class SecurityMiddlewareTest < Minitest::Test
+  def teardown
+    Hacienda::Middleware::RequestLimits.new(->(_env) { [200, {}, []] })
+  end
+
+  def test_request_limits_reject_declared_and_streamed_oversized_bodies
+    app = Hacienda::Middleware::RequestLimits.new(
+      ->(env) { [200, {}, [env.fetch("rack.input").read]] },
+      max_body_bytes: 4
+    )
+    request = Rack::MockRequest.new(app)
+
+    declared = request.post("/", input: "12345", "CONTENT_TYPE" => "text/plain")
+    assert_equal 413, declared.status
+    assert_equal "Request body is too large", declared.body
+
+    env = Rack::MockRequest.env_for("/", method: "POST", input: "12345")
+    env.delete("CONTENT_LENGTH")
+    status, _headers, body = app.call(env)
+    assert_equal 413, status
+    assert_equal "Request body is too large", body.join
+  end
+
+  def test_request_limits_bound_query_size_parameter_count_and_depth
+    app = Hacienda::Middleware::RequestLimits.new(
+      ->(env) {
+        Hacienda::Params.from_request(Rack::Request.new(env))
+        [200, {}, ["OK"]]
+      },
+      max_query_bytes: 100,
+      max_parameters: 3,
+      max_parameter_depth: 2
+    )
+    request = Rack::MockRequest.new(app)
+    query_limited = Hacienda::Middleware::RequestLimits.new(
+      ->(_env) { [200, {}, ["OK"]] },
+      max_query_bytes: 12
+    )
+
+    assert_equal 400, Rack::MockRequest.new(query_limited).get("/?long=12345678").status
+    assert_equal 400, request.get("/?a=1&b=2&c=3&d=4").status
+    assert_equal 400, request.get("/?a[b][c][d]=1").status
+    assert_equal 200, request.get("/?a[b]=1&c=2").status
+  end
+
+  def test_request_limits_apply_to_json_and_hide_parser_details
+    app = Hacienda::Middleware::RequestLimits.new(
+      ->(env) {
+        Hacienda::Params.from_request(Rack::Request.new(env))
+        [200, {}, ["OK"]]
+      },
+      max_parameters: 3,
+      max_parameter_depth: 2
+    )
+    request = Rack::MockRequest.new(app)
+
+    too_many = request.post(
+      "/",
+      input: JSON.generate(a: 1, b: 2, c: 3, d: 4),
+      "CONTENT_TYPE" => "application/json"
+    )
+    assert_equal 400, too_many.status
+    assert_equal "Request parameters exceed configured limits", too_many.body
+
+    malformed = request.post("/", input: "{secret:", "CONTENT_TYPE" => "application/json")
+    assert_equal 400, malformed.status
+    assert_equal "Malformed request parameters", malformed.body
+  end
+
+  def test_request_limits_bound_multipart_parts_and_files
+    body = <<~MULTIPART.gsub("\n", "\r\n")
+      --AaB03x
+      Content-Disposition: form-data; name="first"
+
+      one
+      --AaB03x
+      Content-Disposition: form-data; name="second"; filename="two.txt"
+      Content-Type: text/plain
+
+      two
+      --AaB03x--
+    MULTIPART
+    app = Hacienda::Middleware::RequestLimits.new(
+      ->(env) {
+        Rack::Request.new(env).params
+        [200, {}, ["OK"]]
+      },
+      max_multipart_files: 1,
+      max_multipart_parts: 1
+    )
+
+    response = Rack::MockRequest.new(app).post(
+      "/",
+      input: body,
+      "CONTENT_TYPE" => "multipart/form-data; boundary=AaB03x"
+    )
+
+    assert_equal 413, response.status
+    assert_equal "Multipart request has too many parts", response.body
+
+    files_only = Hacienda::Middleware::RequestLimits.new(
+      ->(env) {
+        Rack::Request.new(env).params
+        [200, {}, ["OK"]]
+      },
+      max_multipart_files: 1,
+      max_multipart_parts: 10
+    )
+    two_files = body.sub('name="first"', 'name="first"; filename="one.txt"')
+    file_response = Rack::MockRequest.new(files_only).post(
+      "/",
+      input: two_files,
+      "CONTENT_TYPE" => "multipart/form-data; boundary=AaB03x"
+    )
+    assert_equal 413, file_response.status
+  end
+
   def test_csrf_rejects_array_tokens_without_crashing
     app = Hacienda::Middleware::CSRF.new(
       ->(_env) { [200, {"content-type" => "text/plain"}, ["OK"]] }

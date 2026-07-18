@@ -2,12 +2,20 @@
 
 APP_ROOT = File.expand_path(__dir__) unless defined?(APP_ROOT)
 require "hacienda"
-require_relative "config/database"
-require "sequel/extensions/migration"
+require "rake/testtask"
+
+Rake::TestTask.new do |task|
+  task.libs << "test"
+  task.pattern = "test/**/*_test.rb"
+end
+
+task default: :test
 
 namespace :db do
   desc "Run database migrations"
   task :migrate do
+    require_relative "config/database"
+    require "sequel/extensions/migration"
     Sequel::Migrator.run(DB, File.join(APP_ROOT, "db", "migrations"))
     puts "Database migrations complete."
   end

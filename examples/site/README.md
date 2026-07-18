@@ -1,7 +1,7 @@
 # Hacienda website
 
 The framework website is itself a small Hacienda application. It has no
-database or session state: routes map directly to module actions and ERB views.
+database or session state: routes map directly to action methods and ERB views.
 
 Start it from this repository:
 

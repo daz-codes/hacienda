@@ -1,0 +1,25 @@
+<% page_title "Our venues" %>
+
+<section class="venue-directory" aria-labelledby="venues-heading">
+  <header>
+    <p class="eyebrow">Will's Pizza near you</p>
+    <h1 id="venues-heading">Our venues</h1>
+    <p>Find your nearest Will's Pizza kitchen.</p>
+  </header>
+
+  <div class="venue-grid">
+    <% venues.each do |venue| %>
+      <article class="venue-card">
+        <h2><%= venue.name %></h2>
+        <p><%= venue.address %></p>
+      </article>
+    <% end %>
+  </div>
+
+  <% if venues.empty? %>
+    <div class="empty-state">
+      <h2>New venues are coming soon</h2>
+      <p>Check back for the next Will's Pizza opening.</p>
+    </div>
+  <% end %>
+</section>

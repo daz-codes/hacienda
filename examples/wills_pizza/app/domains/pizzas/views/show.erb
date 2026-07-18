@@ -1,0 +1,18 @@
+<% page_title pizza.name %>
+
+<article class="pizza-detail">
+  <p class="eyebrow">From the menu</p>
+  <div class="pizza-detail-heading">
+    <h1><%= pizza.name %></h1>
+    <strong>&pound;<%= pizza.price %></strong>
+  </div>
+  <p class="pizza-description"><%= pizza.description %></p>
+  <% if pizza.vegetarian %><span class="diet-label">Vegetarian</span><% end %>
+
+  <div class="page-actions">
+    <%= link "Order this pizza", "/orders/new", class: "button button-primary" %>
+    <% if context.current_user %>
+      <%= link "Edit pizza", "/pizzas/#{pizza.id}/edit", class: "button button-secondary" %>
+    <% end %>
+  </div>
+</article>

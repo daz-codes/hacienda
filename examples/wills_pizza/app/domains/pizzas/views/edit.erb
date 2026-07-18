@@ -1,0 +1,12 @@
+<% page_title "Edit #{pizza.name}" %>
+
+<section class="form-page">
+  <p class="eyebrow">Menu management</p>
+  <h1>Edit <%= pizza.name %></h1>
+  <%= partial :form,
+        pizza:,
+        errors:,
+        action: "/pizzas/#{pizza.id}",
+        method: "patch",
+        submit_label: "Save pizza" %>
+</section>

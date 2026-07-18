@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "cgi"
+require "cgi/escape"
 require "rdoc"
 require "rdoc/markdown"
 require "rdoc/markup/to_html"

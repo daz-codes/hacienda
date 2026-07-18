@@ -1,0 +1,81 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler"
+require "fileutils"
+require "open3"
+require "rubygems"
+require "tmpdir"
+
+base_ref = ARGV.shift
+abort "usage: script/upgrade_test BASE_REF" unless base_ref && ARGV.empty?
+
+root = File.expand_path("..", __dir__)
+
+def run!(environment, *command, chdir:)
+  stdout, stderr, status = Bundler.with_unbundled_env do
+    Open3.capture3(environment, *command, chdir:)
+  end
+  return stdout if status.success?
+
+  abort <<~MESSAGE
+    command failed: #{command.join(" ")}
+    directory: #{chdir}
+    stdout:
+    #{stdout}
+    stderr:
+    #{stderr}
+  MESSAGE
+end
+
+Dir.mktmpdir("hacienda-upgrade") do |directory|
+  source = File.join(directory, "previous")
+  archive = File.join(directory, "previous.tar")
+  FileUtils.mkdir_p(source)
+  run!({}, "git", "archive", "--format=tar", "--output", archive, base_ref, chdir: root)
+  run!({}, "tar", "-xf", archive, "-C", source, chdir: root)
+
+  gemspec = File.join(source, "hacienda.gemspec")
+  abort "#{base_ref} does not contain hacienda.gemspec" unless File.file?(gemspec)
+
+  gem_file = File.join(directory, "previous.gem")
+  run!({}, Gem.ruby, "-S", "gem", "build", gemspec, "--output", gem_file, chdir: source)
+
+  gem_home = File.join(directory, "gems")
+  bin = File.join(directory, "bin")
+  run!(
+    {}, Gem.ruby, "-S", "gem", "install", gem_file,
+    "--install-dir", gem_home, "--bindir", bin, "--no-document",
+    chdir: directory
+  )
+
+  environment = {
+    "GEM_HOME" => gem_home,
+    "GEM_PATH" => [gem_home, *Gem.path].join(File::PATH_SEPARATOR),
+    "PATH" => [bin, ENV.fetch("PATH")].join(File::PATH_SEPARATOR)
+  }
+  executable = File.join(bin, "hac")
+  abort "#{base_ref} did not install the hac executable" unless File.executable?(executable)
+
+  run!(environment, executable, "new", "upgrade_app", chdir: directory)
+  application = File.join(directory, "upgrade_app")
+  gemfile = File.join(application, "Gemfile")
+  content = File.read(gemfile)
+  replaced = content.sub(/^gem "hacienda".*$/, %(gem "hacienda", path: #{root.inspect}))
+  abort "generated Gemfile does not declare hacienda" if replaced == content
+
+  File.write(gemfile, replaced)
+  sentinel = File.join(application, "UPGRADE_SENTINEL")
+  File.write(sentinel, "# Application-owned file: upgrade tests must preserve this.\n")
+
+  app_environment = environment.merge("BUNDLE_WITHOUT" => "development")
+  run!(app_environment, Gem.ruby, "-S", "bundle", "install", "--jobs", "4", "--retry", "3", chdir: application)
+  run!(
+    app_environment, Gem.ruby, "-S", "bundle", "exec", Gem.ruby,
+    File.join(root, "exe", "hac"), "db:migrate", chdir: application
+  )
+  puts run!(app_environment, Gem.ruby, "-S", "bundle", "exec", "rake", "test", chdir: application)
+  abort "upgrade regenerated application-owned files" unless File.file?(sentinel)
+
+  puts "Upgrade contract passed: #{base_ref} generated app runs on the current checkout."
+end

@@ -1,0 +1,45 @@
+<% page_title "Order pizza" %>
+
+<section class="checkout-page">
+  <header>
+    <p class="eyebrow">Delivery order</p>
+    <h1>What can we bake for you?</h1>
+    <p>Choose quantities, then tell us where to bring your pizzas.</p>
+  </header>
+
+  <%= error_messages errors %>
+
+  <%= form_start "/orders", method: "post", context:, class: "checkout-form" %>
+    <fieldset class="order-menu">
+      <legend>Your pizzas</legend>
+      <% menu.each do |pizza| %>
+        <label class="order-row">
+          <span>
+            <strong><%= pizza.name %></strong>
+            <small><%= pizza.description %></small>
+          </span>
+          <span class="order-price">&pound;<%= pizza.price %></span>
+          <input type="number" name="quantities[<%= pizza.id %>]" min="0" max="20" value="0" aria-label="Quantity of <%= pizza.name %>">
+        </label>
+      <% end %>
+    </fieldset>
+
+    <fieldset class="customer-fields">
+      <legend>Delivery details</legend>
+      <label>
+        Name
+        <input name="customer_name" value="<%= order.customer_name %>" autocomplete="name" required>
+      </label>
+      <label>
+        Email
+        <input name="email" type="email" value="<%= order.email %>" autocomplete="email" required>
+      </label>
+      <label>
+        Delivery address
+        <textarea name="delivery_address" rows="4" autocomplete="street-address" required><%= order.delivery_address %></textarea>
+      </label>
+    </fieldset>
+
+    <button type="submit" class="button button-primary">Place order</button>
+  <%= form_end %>
+</section>

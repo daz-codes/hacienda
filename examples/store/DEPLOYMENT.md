@@ -7,7 +7,8 @@ before using it.
 ## Prepare the application
 
 Install dependencies and commit `Gemfile.lock`; the Docker build is
-intentionally locked and will fail without it:
+intentionally locked and will fail without it. It also runs
+`hac assets:precompile` so production asset helpers resolve fingerprinted files:
 
 ```sh
 bundle install

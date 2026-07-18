@@ -81,8 +81,8 @@ app/domains/posts/
 ├── policy.rb
 ├── repository.rb
 ├── actions/
-│   ├── publish.rb
-│   └── archive.rb
+│   ├── management_actions.rb
+│   └── publishing_actions.rb
 └── views/
 
 app/domains/comments/
@@ -92,9 +92,9 @@ app/domains/comments/
 └── repository.rb
 ```
 
-`posts/actions.rb` keeps the common HTTP actions together. `publish.rb` and
-`archive.rb` are split out to show the escape hatch for larger or more
-domain-specific actions.
+`posts/actions.rb` keeps the common HTTP actions together.
+`management_actions.rb` contains the guarded editing workflow, while
+`publishing_actions.rb` groups publish and archive in a separate action set.
 
 Current-user loading is configured once:
 
@@ -116,7 +116,7 @@ get "/posts/:id", :show
 guard Auth::Required do
   get "/posts/new", :new
   post "/posts", :create
-  post "/posts/:id/publish", :publish
+  post "/posts/:id/publish", :publish, actions: :publishing
 end
 ```
 
@@ -124,8 +124,8 @@ Actions receive request context separately from parameters:
 
 ```ruby
 module Posts
-  module Publish
-    def self.respond(context, params)
+  class PublishingActions < Hacienda::Actions
+    def publish(context, params)
       post = Repository.find(params[:id])
       return response("Forbidden", status: 403) unless
         Policy.manage?(context.current_user, post)

@@ -1,0 +1,12 @@
+# Recurring jobs use a deliberately small interval syntax:
+#
+# tasks:
+#   cleanup:
+#     job: "Maintenance::CleanupJob"
+#     every: "1 hour"
+#     queue: "default"
+#     priority: 0
+#     enabled: true
+#     args: []
+#     kwargs: {}
+tasks: {}

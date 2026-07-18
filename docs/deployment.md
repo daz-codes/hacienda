@@ -41,6 +41,17 @@ Your reverse proxy should overwrite, not append to, untrusted `Host` and
 `X-Forwarded-*` headers. Kamal Proxy does this in the generated deployment
 shape; custom proxies should be configured with the same assumption.
 
+Generated Rack stacks bound bodies to 10 MiB, query strings to 64 KiB,
+multipart uploads to 16 files and 128 total parts, parameters to 1,024, and
+nesting to 16 levels. The `HACIENDA_MAX_REQUEST_BYTES`,
+`HACIENDA_MAX_QUERY_BYTES`, `HACIENDA_MAX_MULTIPART_FILES`,
+`HACIENDA_MAX_MULTIPART_PARTS`, `HACIENDA_MAX_PARAMETERS`, and
+`HACIENDA_MAX_PARAMETER_DEPTH` environment variables override those defaults.
+Configure the proxy with an equal or lower body limit and explicit request
+header/read timeouts so oversized and slow requests are rejected before they
+occupy a Rack worker. Hacienda cannot enforce a connection timeout from inside
+the request middleware.
+
 ## Rotating secrets
 
 Rotate the credentials master key with `hac credentials:rotate`. It re-encrypts
@@ -64,8 +75,8 @@ number of seconds to shorten or lengthen that window.
 The default session store is an encrypted client-side cookie. It has no
 server-side revocation list: logout removes the browser's current cookie, but a
 stolen copy can still be replayed until it expires or the signing/encryption
-secret is rotated. Prefer shorter expiries for higher-risk applications. Use a
-future database-backed session store when per-session revocation is required.
+secret is rotated. Prefer shorter expiries for higher-risk applications. Set
+`HACIENDA_SESSION_STORE=database` when per-session revocation is required.
 
 If a development checkout references Hacienda with `gem "hacienda", path: ...`,
 replace it with a released gem version before building an image whose context
@@ -79,6 +90,7 @@ The generated image:
 - installs only runtime SQLite libraries in the final stage;
 - runs as an unprivileged `hacienda` user;
 - excludes development dependencies;
+- compiles fingerprinted assets and their production manifest;
 - starts Rack/Puma on port 5151;
 - writes production logs to stdout.
 
@@ -107,6 +119,10 @@ docker run --rm -p 5151:5151 \
 
 Check <http://localhost:5151/up>. The endpoint is a liveness check and does not
 query the database or external services.
+
+For deployments that do not use the generated Dockerfile, run
+`bundle exec hac assets:precompile` before starting the production process.
+Development continues to serve the readable source files in `public/assets`.
 
 ## Kamal
 

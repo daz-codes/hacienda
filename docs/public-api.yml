@@ -1,0 +1,323 @@
+schema: 1
+framework_version: 0.1.0
+
+ruby:
+  Hacienda:
+    singleton_methods:
+      - app_host
+      - app_url
+      - cache
+      - cancel_job
+      - clear_enqueued_jobs
+      - clear_mail_deliveries
+      - configure_cache
+      - configure_jobs
+      - configure_logger
+      - configure_mail
+      - configure_storage
+      - credentials
+      - enqueue
+      - enqueue_all
+      - enqueue_at
+      - enqueue_in
+      - enqueued_jobs
+      - env
+      - env=
+      - job_adapter
+      - job_outbox
+      - logger
+      - mail
+      - mail_deliveries
+      - perform_enqueued_jobs
+      - reload
+      - reload=
+      - root
+      - root=
+      - shutdown_jobs
+      - signed_token
+      - storage
+  Hacienda::Application:
+    instance_methods: [call, reload!, transaction, database, events, cache, storage, routes]
+  Hacienda::Actions:
+    singleton_methods: [action_methods, action?, validate!]
+    instance_methods: [dispatch]
+  Hacienda::Assets:
+    singleton_methods: [precompile, clobber, path, rack_options, manifest]
+  Hacienda::Attributes:
+    instance_methods: [assign, attributes, changed?, changed_attribute_names, changed_attributes, changes, attribute_was, persisted?]
+  Hacienda::Attributes::ClassMethods:
+    instance_methods: [attribute, attributes, attribute_definitions, from_persistence]
+  Hacienda::Cache:
+    instance_methods: [read, write, fetch, delete, clear, expand_key]
+  Hacienda::Cache::MemoryStore:
+    instance_methods: [read, write, delete, clear, size]
+  Hacienda::Cache::NullStore:
+    instance_methods: [read, write, delete, clear]
+  Hacienda::Cache::HTTP:
+    singleton_methods: [headers, fresh?, etag_header]
+  Hacienda::Context:
+    instance_methods: [request, session, cookies, flash, current_user, current_user=, csrf_token, cache, storage, transaction, navigation_request?, prefetch?, navigation_reload!, stale?]
+  Hacienda::Credentials:
+    singleton_methods: [generate_key]
+    instance_methods: [read_text, write_text, to_h, fetch, dig, rotate]
+  Hacienda::Environment:
+    instance_methods: [name, development?, test?, production?]
+  Hacienda::Migrations:
+    singleton_methods: [pending, current?, migration_files]
+  Hacienda::Events:
+    instance_methods: [configure, configured?, subscribe, unsubscribe, publish, subscriptions, reload!]
+  Hacienda::Events::Recorder:
+    instance_methods: [call, events, clear]
+  Hacienda::Events::Outbox:
+    instance_methods: [write, dispatch_once, failed, retry_failed, pending_count]
+  Hacienda::Flash:
+    instance_methods: ['[]', '[]=', now, each, any?, to_h]
+  Hacienda::HTML:
+    singleton_methods: [escape, safe]
+  Hacienda::Jobs::Adapter:
+    singleton_methods: [validate!, capabilities, supports?, durable?, external?, transactional_with?, requires_outbox?]
+  Hacienda::Jobs::Adapters::Inline:
+    singleton_methods: [enqueue, capabilities]
+  Hacienda::Jobs::Adapters::Async:
+    instance_methods: [enqueue, capabilities, shutdown]
+  Hacienda::Jobs::Adapters::Test:
+    singleton_methods: [enqueue, capabilities, enqueued_jobs, perform_enqueued_jobs, clear]
+  Hacienda::Jobs::Adapters::Database:
+    instance_methods: [enqueue, enqueue_all, work_once, claim_many, pending, running, scheduled, completed, discarded, failed, retry_failed, cancel, discard, reschedule, pause_queue, resume_queue, status, health, prune]
+  Hacienda::Jobs::Worker:
+    instance_methods: [run, work_once, stop, stopping?]
+  Hacienda::Jobs::Outbox:
+    instance_methods: [write, dispatch_once, failed, retry_failed, pending_count, scheduled]
+  Hacienda::Jobs::RecurringSchedule:
+    singleton_methods: [load, set_enabled]
+    instance_methods: [entries, enabled_entries, find, due_at]
+  Hacienda::Jobs::RecurringScheduler:
+    instance_methods: [run, tick, trigger, stop, stopping?]
+  Hacienda::Mailer::Inbox:
+    instance_methods: [call]
+  Hacienda::Middleware::CSRF:
+    instance_methods: [call]
+  Hacienda::Middleware::HostAuthorization:
+    instance_methods: [call]
+  Hacienda::Middleware::PendingMigrations:
+    instance_methods: [call]
+  Hacienda::Middleware::RateLimiter:
+    instance_methods: [call]
+  Hacienda::Middleware::RequestLogger:
+    instance_methods: [call]
+  Hacienda::Middleware::RequestLimits:
+    instance_methods: [call]
+  Hacienda::Middleware::SecurityHeaders:
+    instance_methods: [call]
+  Hacienda::Middleware::StorageFiles:
+    instance_methods: [call]
+  Hacienda::Params:
+    instance_methods: ['[]', fetch, dig, key?, slice, permit, require, to_h]
+  Hacienda::Response:
+    instance_methods: [finish, status, headers, body]
+  Hacienda::Responses:
+    instance_methods: [render, redirect, json, text, response]
+  Hacienda::Routes:
+    instance_methods: [get, post, put, patch, delete, guard]
+  Hacienda::SessionStore:
+    singleton_methods: [create_table]
+    instance_methods: [prune_expired, revoke]
+  Hacienda::SignedToken:
+    instance_methods: [generate, verify]
+  Hacienda::SQLite:
+    singleton_methods: [configure, check, checkpoint, sqlite?, busy_error?]
+  Hacienda::Storage:
+    instance_methods: [store, open, read, delete, exist?, url, local?, public_path]
+  Hacienda::Storage::Upload:
+    singleton_methods: [present?, wrap]
+    instance_methods: [validate!, read_prefix, checksum, filename, content_type, byte_size]
+  Hacienda::Storage::ContentTypeInspector:
+    instance_methods: [call]
+  Hacienda::Storage::DiskService:
+    instance_methods: [write, open, delete, exist?, url, local?]
+  Hacienda::Storage::MemoryService:
+    instance_methods: [write, open, delete, exist?, url, local?]
+  Hacienda::Storage::NullService:
+    instance_methods: [write, open, delete, exist?, url, local?]
+  Hacienda::Store:
+    instance_methods: [dataset, all, first, find, load, save, delete, refresh]
+  Hacienda::Transaction:
+    instance_methods: [emit, enqueue, enqueue_all, enqueue_in, enqueue_at]
+  Hacienda::ValidationErrors:
+    instance_methods: [add, '[]', each, any?, empty?, clear, full_messages, to_a]
+  Hacienda::Validations:
+    instance_methods: [errors, valid?, invalid?]
+  Hacienda::View:
+    instance_methods: [name, locals, status, layout]
+
+exceptions:
+  - Hacienda::Error
+  - Hacienda::NotFound
+  - Hacienda::BadRequest
+  - Hacienda::PayloadTooLarge
+  - Hacienda::RequestLimitExceeded
+  - Hacienda::Routes::CollisionError
+  - Hacienda::Assets::Error
+  - Hacienda::UnsafeRedirect
+  - Hacienda::Store::StaleObject
+  - Hacienda::Jobs::Error
+  - Hacienda::Jobs::TimeoutError
+  - Hacienda::Jobs::CancelledError
+  - Hacienda::Storage::InvalidUpload
+  - Hacienda::Storage::TooLarge
+  - Hacienda::Storage::UnsupportedType
+  - Hacienda::Storage::InvalidContent
+
+cli:
+  executables: [hac, fac]
+  commands:
+    - new APP_NAME
+    - generate domain NAME
+    - generate rest NAME
+    - generate action DOMAIN NAME
+    - generate migration NAME
+    - generate auth
+    - credentials:show
+    - credentials:edit
+    - credentials:rotate
+    - start
+    - console
+    - routes
+    - db:migrate
+    - db:rollback
+    - db:seed
+    - db:check
+    - db:checkpoint
+    - assets:precompile
+    - assets:clobber
+    - jobs:work
+    - jobs:status
+    - jobs:health
+    - jobs:benchmark
+    - jobs:list
+    - jobs:failed
+    - jobs:scheduled
+    - jobs:prune
+    - jobs:pause
+    - jobs:resume
+    - jobs:schedule
+    - jobs:recurring
+    - jobs:cancel
+    - jobs:discard
+    - jobs:reschedule
+    - jobs:retry
+
+generated_files:
+  - .dockerignore
+  - .gitignore
+  - .kamal/secrets
+  - DEPLOYMENT.md
+  - Dockerfile
+  - Gemfile
+  - Procfile.dev
+  - README.md
+  - Rakefile
+  - app/domains/home/actions.rb
+  - app/domains/home/routes.rb
+  - app/domains/home/views/components/_feature.erb
+  - app/domains/home/views/index.erb
+  - app/errors/404.erb
+  - app/errors/500.erb
+  - app/layouts/application.erb
+  - config.ru
+  - config/application.rb
+  - config/cache.rb
+  - config/credentials.yml.enc
+  - config/database.rb
+  - config/deploy.yml
+  - config/environment.rb
+  - config/environments/development.rb
+  - config/environments/production.rb
+  - config/environments/test.rb
+  - config/jobs.rb
+  - config/litestream.yml.example
+  - config/mail.rb
+  - config/master.key
+  - config/recurring.yml
+  - config/storage.rb
+  - db/migrations/20260629000000_create_hacienda_runtime.rb
+  - db/seeds.rb
+  - public/assets/HELIUM-LICENSE.txt
+  - public/assets/IDIOMORPH-LICENSE.txt
+  - public/assets/application.css
+  - public/assets/hacienda-navigation.js
+  - public/assets/helium-csp-sse.js
+  - public/assets/helium-csp.js
+  - public/assets/helium-sse.js
+  - public/assets/helium.js
+  - public/assets/idiomorph.esm.js
+  - public/assets/jexpr.js
+  - test/domains/home/actions_test.rb
+  - test/integration/.keep
+  - test/test_helper.rb
+
+persistence:
+  tables:
+    - hacienda_jobs
+    - hacienda_job_outbox
+    - hacienda_job_workers
+    - hacienda_job_queues
+    - hacienda_outbox
+    - hacienda_recurring_runs
+    - hacienda_sessions
+  payload_keys: [args, kwargs, __hacienda_type__]
+
+environment_variables:
+  - HACIENDA_ALLOWED_HOSTS
+  - HACIENDA_APP_URL
+  - HACIENDA_CACHE_SIZE
+  - HACIENDA_CACHE_STORE
+  - HACIENDA_DASHBOARD_PASSWORD
+  - HACIENDA_DASHBOARD_USERNAME
+  - HACIENDA_ENV
+  - HACIENDA_EVENT_OUTBOX
+  - HACIENDA_JOB_ADAPTER
+  - HACIENDA_JOB_COMPLETED_RETENTION
+  - HACIENDA_JOB_DISCARDED_RETENTION
+  - HACIENDA_JOB_FAILED_RETENTION
+  - HACIENDA_JOB_HEARTBEAT_INTERVAL
+  - HACIENDA_JOB_LEASE_SECONDS
+  - HACIENDA_JOB_TIMEOUT
+  - HACIENDA_JOB_WORKER_TIMEOUT
+  - HACIENDA_MAIL_DELIVERY
+  - HACIENDA_MAIL_FROM
+  - HACIENDA_MAX_MULTIPART_FILES
+  - HACIENDA_MAX_MULTIPART_PARTS
+  - HACIENDA_MAX_PARAMETER_DEPTH
+  - HACIENDA_MAX_PARAMETERS
+  - HACIENDA_MAX_QUERY_BYTES
+  - HACIENDA_MAX_REQUEST_BYTES
+  - HACIENDA_MASTER_KEY
+  - HACIENDA_NAVIGATION
+  - HACIENDA_PREFETCH
+  - HACIENDA_SECRET_KEY_BASE
+  - HACIENDA_SECRET_KEY_BASE_OLD
+  - HACIENDA_SESSION_EXPIRE_AFTER
+  - HACIENDA_SESSION_SECRET
+  - HACIENDA_SESSION_SECRET_OLD
+  - HACIENDA_SESSION_STORE
+  - HACIENDA_STORAGE_ROOT
+  - HACIENDA_STORAGE_SERVICE
+
+navigation_protocol:
+  headers: [X-Hacienda-Navigation, X-Hacienda-Prefetch]
+  attributes:
+    - data-hacienda-active-prefix
+    - data-hacienda-navigating
+    - data-hacienda-navigation
+    - data-hacienda-permanent
+    - data-hacienda-prefetch
+  paths: [/hac/jobs, /hac/jobs/health]
+  events:
+    - hacienda:before-navigate
+    - hacienda:navigation-start
+    - hacienda:before-morph
+    - hacienda:load
+    - hacienda:navigation-error
+    - hacienda:navigation-end
+    - hacienda:invalidate

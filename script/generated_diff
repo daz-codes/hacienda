@@ -1,0 +1,73 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "open3"
+require "fileutils"
+require "tempfile"
+
+base_ref = ARGV.shift
+abort "usage: script/generated_diff BASE_REF [OUTPUT]" unless base_ref && ARGV.length <= 1
+
+output_path = ARGV.shift
+root = File.expand_path("..", __dir__)
+snapshots = Dir[File.join(root, "test", "snapshots", "*.snap")].sort
+abort "no generator snapshots found" if snapshots.empty?
+
+sections = snapshots.map do |current_path|
+  relative = current_path.delete_prefix("#{root}/")
+  previous, error, status = Open3.capture3("git", "show", "#{base_ref}:#{relative}", chdir: root)
+  abort "cannot read #{relative} at #{base_ref}: #{error.strip}" unless status.success?
+
+  current = File.read(current_path)
+  diff = if previous == current
+    "No changes."
+  else
+    Tempfile.create(["hacienda-previous", ".snap"]) do |old_file|
+      Tempfile.create(["hacienda-current", ".snap"]) do |new_file|
+        old_file.write(previous)
+        old_file.flush
+        new_file.write(current)
+        new_file.flush
+        text, diff_error, diff_status = Open3.capture3(
+          "git", "diff", "--no-index", "--no-ext-diff", "--", old_file.path, new_file.path
+        )
+        unless [0, 1].include?(diff_status.exitstatus)
+          abort "cannot diff #{relative}: #{diff_error.strip}"
+        end
+
+        text
+          .gsub("a#{old_file.path}", "a/#{relative}@#{base_ref}")
+          .gsub("b#{new_file.path}", "b/#{relative}@current")
+      end
+    end
+  end
+
+  <<~MARKDOWN
+    ## `#{relative}`
+
+    #{diff == "No changes." ? diff : "```diff\n#{diff.rstrip}\n```"}
+  MARKDOWN
+end
+
+target, target_error, target_status = Open3.capture3("git", "rev-parse", "--short", "HEAD", chdir: root)
+abort "cannot resolve current revision: #{target_error.strip}" unless target_status.success?
+
+document = <<~MARKDOWN
+  # Generated Application Changes
+
+  Base: `#{base_ref}`  
+  Target: `#{target.strip}`
+
+  These diffs cover generator snapshots verified by the test suite. Generated
+  files are application-owned; review and merge relevant changes manually.
+
+  #{sections.join("\n")}
+MARKDOWN
+
+if output_path
+  destination = File.expand_path(output_path, root)
+  FileUtils.mkdir_p(File.dirname(destination))
+  File.write(destination, document)
+else
+  puts document
+end

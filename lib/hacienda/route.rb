@@ -2,15 +2,35 @@
 
 module Hacienda
   class Route
-    attr_reader :verb, :path, :action_name, :domain_name, :order, :guards
+    ACTION_GROUP_PATTERN = /\A[a-z][a-z0-9_]*\z/
 
-    def initialize(verb:, path:, action_name:, domain_name:, order:, guards: [])
+    attr_reader :verb, :path, :action_name, :domain_name, :action_group, :order, :guards,
+      :source_file, :source_line
+
+    def initialize(
+      verb:,
+      path:,
+      action_name:,
+      domain_name:,
+      action_group: nil,
+      order:,
+      guards: [],
+      source_file: nil,
+      source_line: nil
+    )
       @verb = verb.to_s.upcase
       @path = normalize(path)
       @action_name = action_name.to_s
-      @domain_name = domain_name
+      @domain_name = domain_name.to_s
+      @action_group = action_group&.to_s
+      if @action_group && !ACTION_GROUP_PATTERN.match?(@action_group)
+        raise ArgumentError, "action group must use lowercase letters, numbers, and underscores: #{@action_group.inspect}"
+      end
       @order = order
       @guards = Array(guards)
+      @source_file = source_file && File.expand_path(source_file)
+      @source_line = source_line && Integer(source_line)
+      @segments = segments_for(@path).freeze
       @pattern, @keys = compile(@path)
     end
 
@@ -25,16 +45,55 @@ module Hacienda
     end
 
     def specificity
-      [path.split("/").count { |segment| !segment.empty? && !segment.start_with?(":") }, -order]
+      [static_segment_count, -order]
     end
 
-    def action
-      constantize(action_module_name)
+    def static_segment_count
+      @segments.count { |segment| !dynamic_segment?(segment) }
     end
 
-    def action_module_name
-      "#{camelize(domain_name)}::#{camelize(action_name)}"
+    def structural_path
+      return "/" if @segments.empty?
+
+      "/#{@segments.map { |segment| dynamic_segment?(segment) ? ":*" : segment }.join("/")}"
     end
+
+    def overlap_path(other)
+      return unless @segments.length == other.segments.length
+
+      overlap = @segments.zip(other.segments).map do |left, right|
+        if dynamic_segment?(left) && dynamic_segment?(right)
+          "value"
+        elsif dynamic_segment?(left)
+          right
+        elsif dynamic_segment?(right) || left == right
+          left
+        else
+          return
+        end
+      end
+
+      overlap.empty? ? "/" : "/#{overlap.join("/")}"
+    end
+
+    def action_set_name
+      set = action_group ? "#{camelize(action_group)}Actions" : "Actions"
+      "#{camelize(domain_name)}::#{set}"
+    end
+
+    def action_handler_name
+      "#{action_set_name}##{action_name}"
+    end
+
+    def source_location
+      return "(unknown source)" unless source_file
+
+      source_line ? "#{source_file}:#{source_line}" : source_file
+    end
+
+    protected
+
+    attr_reader :segments
 
     private
 
@@ -45,8 +104,8 @@ module Hacienda
 
     def compile(value)
       keys = []
-      segments = value.split("/").reject(&:empty?).map do |segment|
-        if segment.start_with?(":")
+      segments = segments_for(value).map do |segment|
+        if dynamic_segment?(segment)
           key = segment.delete_prefix(":")
           keys << key
           "(?<#{key}>[^/]+)"
@@ -59,12 +118,17 @@ module Hacienda
       [pattern, keys]
     end
 
+    def segments_for(value)
+      value.split("/").reject(&:empty?)
+    end
+
+    def dynamic_segment?(segment)
+      segment.start_with?(":")
+    end
+
     def camelize(value)
       value.to_s.split("_").map(&:capitalize).join
     end
 
-    def constantize(name)
-      name.split("::").inject(Object) { |scope, constant| scope.const_get(constant) }
-    end
   end
 end

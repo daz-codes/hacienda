@@ -1,0 +1,187 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ruby:
+    name: Ruby ${{ matrix.ruby }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2", "4.0"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Run framework and package tests
+        run: bundle exec rake test
+      - name: Verify tests left the checkout clean
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  examples:
+    name: Example applications
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Install example application bundles
+        run: |
+          for app in blog store todomvc site wills_pizza workouts; do
+            BUNDLE_GEMFILE="examples/$app/Gemfile" bundle install --jobs 4 --retry 3
+          done
+      - name: Run every example suite
+        run: bundle exec rake test:examples
+      - name: Verify repeatable example tests
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+          test -z "$(find examples -type f \( -name '*.sqlite3' -o -path '*/log/*.log' \) -print)"
+
+  client:
+    name: JavaScript and browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run client tests
+        run: npm run test:client
+      - name: Run browser smoke tests
+        run: npm run test:browser
+      - name: Verify tests left the checkout clean
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  postgresql:
+    name: PostgreSQL portability
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: hacienda_test
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hacienda_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/hacienda_test
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Run PostgreSQL contracts
+        run: bundle exec rake test:postgresql
+      - name: Verify tests left the checkout clean
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  release-contract:
+    name: Public API and upgrades
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Validate public API and release artifacts
+        run: bundle exec rake release:check
+      - name: Find previous release candidate
+        id: previous
+        shell: bash
+        run: |
+          version="$(bundle exec ruby -Ilib -e 'require "hacienda/version"; print Hacienda::VERSION')"
+          previous="$(git tag --merged HEAD --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+\.rc[0-9]+$' | grep -v "^v${version}$" | head -n 1 || true)"
+          echo "ref=${previous}" >> "$GITHUB_OUTPUT"
+      - name: Generate upgrade diff
+        if: steps.previous.outputs.ref != ''
+        run: bundle exec ruby script/generated_diff "${{ steps.previous.outputs.ref }}" > /tmp/generated-diff.md
+      - name: Test previous release candidate upgrade
+        if: steps.previous.outputs.ref != ''
+        run: bundle exec ruby script/upgrade_test "${{ steps.previous.outputs.ref }}"
+      - name: Note first release candidate baseline
+        if: steps.previous.outputs.ref == ''
+        run: echo "No previous release-candidate tag exists; upgrade test is not yet applicable."
+      - name: Verify checks left the checkout clean
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  dependencies:
+    name: Dependency audits
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Audit Ruby dependencies
+        run: bundle exec bundle-audit check --update
+      - name: Audit JavaScript dependencies
+        run: npm audit --audit-level=high
+      - name: Verify audits left the checkout clean
+        run: |
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=all)"
+
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Scan committed history and proposed changes
+        uses: trufflesecurity/trufflehog@v3.95.9
+        with:
+          extra_args: --results=verified,unknown

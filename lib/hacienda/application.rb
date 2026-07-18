@@ -41,21 +41,14 @@ module Hacienda
       @storage = storage || Storage.new
       @navigation = Navigation.new(navigation)
       @reload_mutex = Mutex.new
-      @inline_action_constants = {}
       @loader = Zeitwerk::Loader.new
       @domains_path = File.join(@root, "app", "domains")
       @loader.push_dir(@domains_path)
       @loader.collapse(File.join(@domains_path, "*", "actions"))
-      @loader.ignore(File.join(@domains_path, "*", "actions.rb"))
       @loader.ignore(File.join(@domains_path, "*", "routes.rb"))
-      @loader.on_load do |_constant_path, value, file|
-        if action_file?(file) && value.is_a?(Module) && !value.singleton_class.ancestors.include?(Responses)
-          value.extend(Responses)
-        end
-      end
       @loader.enable_reloading if reload
       @loader.setup
-      load_inline_actions
+      load_action_sets
       load_routes
     end
 
@@ -70,6 +63,8 @@ module Hacienda
       end
     rescue NotFound => error
       not_found(env, error)
+    rescue PayloadTooLarge
+      payload_too_large
     rescue BadRequest => error
       bad_request(error)
     rescue StandardError => error
@@ -109,14 +104,13 @@ module Hacienda
       return finish(guarded_response, route, context:) if guarded_response
 
       action = action_for(route)
-      result = action.respond(context, params)
+      result = action.dispatch(route.action_name, context, params)
       finish(result, route, context:)
     end
 
     def reload_without_lock!
-      unload_inline_actions
       loader.reload
-      load_inline_actions
+      load_action_sets
       routes.clear
       load_routes
       events.reload!
@@ -141,87 +135,47 @@ module Hacienda
     end
 
     def action_for(route)
-      unless inline_action_defined?(route)
-        file = action_file(route)
-        raise NotFound, "action not found: #{file}" unless File.file?(file)
+      action_set = action_set_class(route)
+      return action_set.new if action_set&.action?(route.action_name)
+
+      raise NotFound, "action not found: #{route.action_handler_name}"
+    end
+
+    def action_set_class(route)
+      action_set = constantize(route.action_set_name)
+      unless action_set.is_a?(Class) && action_set < Actions
+        raise Error, "#{route.action_set_name} must inherit from Hacienda::Actions"
       end
+      action_set
+    rescue NameError => error
+      raise unless missing_constant?(error, route.action_set_name)
 
-      route.action.tap do |action|
-        action.extend(Responses) if action.is_a?(Module) && !action.singleton_class.ancestors.include?(Responses)
-      end
+      nil
     end
 
-    def action_file(route)
-      File.join(@domains_path, route.domain_name, "actions", "#{route.action_name}.rb")
-    end
-
-    def action_file?(file)
-      file && file.start_with?(@domains_path) &&
-        file.include?("#{File::SEPARATOR}actions#{File::SEPARATOR}")
-    end
-
-    def inline_actions_file(domain)
-      File.join(@domains_path, domain, "actions.rb")
-    end
-
-    def load_inline_actions
-      @inline_action_constants.clear
-      Dir[File.join(@domains_path, "*", "actions.rb")].sort.each do |file|
-        domain = File.basename(File.dirname(file))
-        namespace = camelize(domain)
-        inline_constants = inline_action_constant_names(file, namespace)
-        clear_inline_action_autoloads(namespace, inline_constants)
-        before = constants_for(namespace)
-        load file
-        after = constants_for(namespace)
-        defined_inline_constants = inline_constants.select do |constant|
-          Object.const_defined?(namespace, false) &&
-            Object.const_get(namespace).const_defined?(constant, false)
+    def load_action_sets
+      action_set_files.each do |file|
+        name = loader.cpath_expected_at(file)
+        action_set = constantize(name)
+        unless action_set.is_a?(Class) && action_set < Actions
+          raise Error, "#{name} must inherit from Hacienda::Actions"
         end
-        @inline_action_constants[namespace] =
-          defined_inline_constants.empty? ? after - before : defined_inline_constants
+        action_set.validate!
+      rescue NameError => error
+        raise unless missing_constant?(error, name)
+
+        raise Error, "#{file} must define #{name} < Hacienda::Actions"
       end
     end
 
-    def inline_action_constant_names(file, namespace)
-      File.read(file).scan(/^\s*module\s+([A-Z]\w*)\b/).flatten
-        .reject { |constant| constant == namespace }
-        .map(&:to_sym)
+    def action_set_files
+      root_sets = Dir[File.join(@domains_path, "*", "actions.rb")]
+      grouped_sets = Dir[File.join(@domains_path, "*", "actions", "**", "*_actions.rb")]
+      (root_sets + grouped_sets).sort
     end
 
-    def clear_inline_action_autoloads(namespace, constants)
-      return unless Object.const_defined?(namespace, false)
-
-      domain_module = Object.const_get(namespace)
-      constants.each do |constant|
-        domain_module.__send__(:remove_const, constant) if domain_module.const_defined?(constant, false)
-      end
-    end
-
-    def unload_inline_actions
-      @inline_action_constants.each do |namespace, constants|
-        next unless Object.const_defined?(namespace, false)
-
-        domain_module = Object.const_get(namespace)
-        constants.each do |constant|
-          domain_module.__send__(:remove_const, constant) if domain_module.const_defined?(constant, false)
-        end
-      end
-      @inline_action_constants.clear
-    end
-
-    def constants_for(namespace)
-      return [] unless Object.const_defined?(namespace, false)
-
-      Object.const_get(namespace).constants(false)
-    end
-
-    def inline_action_defined?(route)
-      namespace = camelize(route.domain_name)
-      action = camelize(route.action_name).to_sym
-      @inline_action_constants.fetch(namespace, []).include?(action) &&
-        Object.const_defined?(namespace, false) &&
-        Object.const_get(namespace).const_defined?(action, false)
+    def missing_constant?(error, name)
+      error.respond_to?(:name) && error.name.to_s == name.split("::").last
     end
 
     def load_routes
@@ -319,6 +273,14 @@ module Hacienda
       Response.new(
         error.message,
         status: 400,
+        headers: {"content-type" => "text/plain; charset=utf-8"}
+      ).finish
+    end
+
+    def payload_too_large
+      Response.new(
+        "Request body is too large",
+        status: 413,
         headers: {"content-type" => "text/plain; charset=utf-8"}
       ).finish
     end

@@ -40,6 +40,23 @@ bundle exec hac start
 bundle exec rackup -p 5151
 ```
 
+Both startup paths check for pending migrations. `hac start` refuses
+to boot and prints the pending filenames; direct Rack requests receive
+an actionable development `503` page. Hacienda never migrates
+automatically at web-process boot.
+
+Development serves the readable source files in `public/assets`.
+Production resolves asset helpers through a fingerprint manifest. The
+generated Dockerfile compiles it automatically; for another deployment
+method run:
+
+```sh
+bundle exec hac assets:precompile
+```
+
+Use `bundle exec hac assets:clobber` to remove compiled copies while
+preserving the source files.
+
 Open a console with the application environment loaded:
 
 ```sh
@@ -62,7 +79,7 @@ bundle exec hac db:checkpoint --mode TRUNCATE
 busy-timeout, foreign keys, and unsafe synced-storage paths.
 `db:checkpoint` runs an explicit SQLite WAL checkpoint.
 
-Run the generated Rack::Test integration suite:
+Run the generated Minitest and Rack::Test suite:
 
 ```sh
 bundle exec rake test
@@ -72,17 +89,31 @@ bundle exec rake test
 the test environment, applies pending test-database migrations, and
 provides `ApplicationTest`, `database`, and `csrf_token` helpers.
 
-List routes with their action modules and guards:
+Keep focused tests beside their owning domain under
+`test/domains/<domain>`: plain object tests call Ruby directly,
+repository tests use the isolated database, and action tests may use
+`ApplicationTest` for the Rack contract. Keep complete customer journeys
+and cross-domain workflows under `test/integration`. These test paths
+mirror production ownership without entering the `app/domains`
+autoload tree. Domain generators create the mirrored directory; action,
+REST, and authentication generators add executable behavior tests.
+
+List routes with their action methods and guards:
 
 ```sh
 bundle exec hac routes
+bundle exec hac routes --domain posts
+bundle exec hac routes GET /posts/42
 ```
 
-Routes live in `app/domains/*/routes.rb`. A route maps directly to an
-action module and renders its matching ERB view when it returns a Hash.
-Actions can be grouped in `app/domains/posts/actions.rb` or split into
-`app/domains/posts/actions/show.rb` files. Hacienda checks `actions.rb`
-first, then falls back to the split action file.
+Business routes live only in `app/domains/*/routes.rb`; their file owns
+the route and its action namespace. Rack infrastructure mounts stay in
+`config.ru`. Hacienda rejects duplicate, structurally equivalent, and
+equal-specificity ambiguous routes during boot and reload. By default a
+route maps to a method on the domain's `Actions` class and renders its
+matching ERB view when it returns a Hash. Additional multi-method action
+sets can live in `app/domains/posts/actions/publishing_actions.rb` and
+be selected with `actions: :publishing` in the route.
 
 Branded error pages live in `app/errors/404.erb` and
 `app/errors/500.erb`. They render through the application layout and
@@ -97,7 +128,11 @@ Sequel queries.
 Actions receive request-scoped context separately from parameters:
 
 ```ruby
-def self.respond(context, params)
+module Posts
+  class Actions < Hacienda::Actions
+    def create(context, params)
+    end
+  end
 end
 ```
 
@@ -110,6 +145,11 @@ attributes = params.require(:post).permit(:title, :body)
 
 Malformed JSON returns `400 Bad Request`. Session-authenticated JSON
 writes send their CSRF token in the `X-CSRF-Token` header.
+
+`Hacienda::Middleware::RequestLimits` bounds request bodies, query
+strings, multipart parts/files, parameter count, and nesting. Override
+the generated `HACIENDA_MAX_*` values when needed, and configure matching
+proxy body limits plus slow-client read/header timeouts.
 
 The application cache is available as `context.cache` in actions and
 `APP.cache` elsewhere. Development and test use a bounded memory store;
@@ -129,12 +169,16 @@ storage:
 blob = context.storage.store(
   params[:file],
   max_bytes: 5 * 1024 * 1024,
-  content_types: ["image/*"]
+  content_types: ["image/*"],
+  content_inspector: Hacienda::Storage::ContentTypeInspector.new
 )
 ```
 
 Local `/uploads` URLs are public and unguarded. Store private files
 behind an authenticated route or a remote service with signed URLs.
+Filenames and declared media types are client supplied. Signature checks
+do not make polyglots or compressed files safe; decode/scan them with
+explicit resource limits when the application accepts those formats.
 
 Encrypted credentials live in `config/credentials.yml.enc`. Keep
 `config/master.key` local, or set `HACIENDA_MASTER_KEY` in production.
@@ -156,8 +200,9 @@ compressing pages that reflect secrets if BREACH-style attacks are in
 scope. CSP directives can use `:nonce`, and views can read the matching
 value with `csp_nonce context` for inline scripts or styles.
 
-Mail writes to `tmp/mail` in development. Configure SMTP with env vars
-or encrypted credentials in `config/mail.rb`.
+Mail writes to `tmp/mail` in development. Read it at `/hac/mail`, which
+is local-only and unavailable in production. Configure SMTP with env
+vars or encrypted credentials in `config/mail.rb`.
 
 Background jobs are configured in `config/jobs.rb`. Development uses
 the async in-process adapter, tests run inline, and production persists
@@ -302,23 +347,31 @@ namespace :db do
   end
 end
 
-===== app/domains/home/actions/index.rb =====
-# frozen_string_literal: true
 
-module Home
-  module Index
-    def self.respond(_context, _params)
-      {framework: "Hacienda", command: "hac"}
-    end
+namespace :assets do
+  desc "Compile fingerprinted production assets"
+  task :precompile do
+    manifest = Hacienda::Assets.precompile(root: APP_ROOT)
+    puts "Compiled #{manifest.fetch("assets").length} assets."
+  end
+
+  desc "Remove fingerprinted production assets"
+  task :clobber do
+    count = Hacienda::Assets.clobber(root: APP_ROOT)
+    puts "Removed #{count} compiled assets and the asset manifest."
   end
 end
 
-===== app/domains/home/actions/up.rb =====
+===== app/domains/home/actions.rb =====
 # frozen_string_literal: true
 
 module Home
-  module Up
-    def self.respond(_context, _params)
+  class Actions < Hacienda::Actions
+    def index(_context, _params)
+      {framework: "Hacienda", command: "hac"}
+    end
+
+    def up(_context, _params)
       text "OK"
     end
   end
@@ -393,6 +446,13 @@ session_expire_after = Integer(ENV.fetch("HACIENDA_SESSION_EXPIRE_AFTER", 60 * 6
 raise "HACIENDA_SESSION_EXPIRE_AFTER must be positive" unless session_expire_after.positive?
 session_store = ENV.fetch("HACIENDA_SESSION_STORE", "cookie")
 
+use Hacienda::Middleware::RequestLimits,
+  max_body_bytes: Integer(ENV.fetch("HACIENDA_MAX_REQUEST_BYTES", 10 * 1024 * 1024)),
+  max_query_bytes: Integer(ENV.fetch("HACIENDA_MAX_QUERY_BYTES", 64 * 1024)),
+  max_multipart_files: Integer(ENV.fetch("HACIENDA_MAX_MULTIPART_FILES", 16)),
+  max_multipart_parts: Integer(ENV.fetch("HACIENDA_MAX_MULTIPART_PARTS", 128)),
+  max_parameters: Integer(ENV.fetch("HACIENDA_MAX_PARAMETERS", 1024)),
+  max_parameter_depth: Integer(ENV.fetch("HACIENDA_MAX_PARAMETER_DEPTH", 16))
 allowed_hosts = ENV.fetch("HACIENDA_ALLOWED_HOSTS", "").split(",").map(&:strip).reject(&:empty?)
 allowed_hosts = [Hacienda.app_host] if allowed_hosts.empty? && Hacienda.env.production?
 use Hacienda::Middleware::HostAuthorization, hosts: allowed_hosts
@@ -417,6 +477,9 @@ use Hacienda::Middleware::RateLimiter,
     }
   ]
 use Rack::Head
+use Hacienda::Middleware::PendingMigrations,
+  database: DB,
+  directory: File.join(APP_ROOT, "db", "migrations")
 case session_store
 when "cookie"
   session_secret = ENV["HACIENDA_SESSION_SECRET"] || ENV["SESSION_SECRET"]
@@ -451,7 +514,7 @@ end
 use Hacienda::Middleware::CSRF
 use Rack::MethodOverride
 use Hacienda::Middleware::StorageFiles, storage: APP.storage
-use Rack::Static, urls: ["/assets"], root: File.join(APP_ROOT, "public")
+use Rack::Static, **Hacienda::Assets.rack_options(root: APP_ROOT)
 use Hacienda::Middleware::RequestLogger
 
 map "/hac/jobs" do
@@ -459,6 +522,10 @@ map "/hac/jobs" do
     application: APP,
     recurring_path: File.join(APP_ROOT, "config", "recurring.yml")
   )
+end
+
+map "/hac/mail" do
+  run Hacienda::Mailer::Inbox.new(root: APP_ROOT)
 end
 
 map "/" do
@@ -736,12 +803,12 @@ Sequel.migration do
   end
 end
 
-===== test/integration/home_test.rb =====
+===== test/domains/home/actions_test.rb =====
 # frozen_string_literal: true
 
-require_relative "../test_helper"
+require_relative "../../test_helper"
 
-class HomeTest < ApplicationTest
+class HomeActionsTest < ApplicationTest
   def test_home_page
     get "/"
 
@@ -757,6 +824,8 @@ class HomeTest < ApplicationTest
   end
 end
 
+===== test/integration/.keep =====
+
 ===== test/test_helper.rb =====
 # frozen_string_literal: true
 
@@ -769,9 +838,21 @@ require "rack/test"
 require "securerandom"
 require "sequel"
 require "sequel/extensions/migration"
+require "tmpdir"
+require "fileutils"
 
 TEST_ROOT = File.expand_path("..", __dir__) unless defined?(TEST_ROOT)
+test_database_directory = unless ENV["DATABASE_URL"]
+  Dir.mktmpdir("hacienda-test").tap do |directory|
+    ENV["DATABASE_URL"] = "sqlite://#{File.join(directory, "test.sqlite3")}"
+  end
+end
 TEST_APP = Rack::Builder.parse_file(File.join(TEST_ROOT, "config.ru")) unless defined?(TEST_APP)
+
+Minitest.after_run do
+  APP.database&.disconnect
+  FileUtils.rm_rf(test_database_directory) if test_database_directory
+end
 
 migrations = File.join(TEST_ROOT, "db", "migrations")
 if Dir[File.join(migrations, "*.rb")].any?

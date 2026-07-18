@@ -1,0 +1,46 @@
+<% page_title "Menu" %>
+
+<section class="menu-hero">
+  <img src="<%= asset_path "wills-pizza-menu.png" %>" alt="A freshly baked margherita pizza">
+  <div class="menu-hero-copy">
+    <p class="eyebrow">Neighbourhood pizza, baked hot</p>
+    <h1>Will's Pizza</h1>
+    <p>Pick tonight's pizzas, then send the order straight to our kitchen.</p>
+    <%= link "Start an order", "/orders/new", class: "button button-primary" %>
+  </div>
+</section>
+
+<section class="menu-section" aria-labelledby="menu-heading">
+  <header class="section-heading">
+    <div>
+      <p class="eyebrow">Made to order</p>
+      <h2 id="menu-heading">The menu</h2>
+    </div>
+    <% if context.current_user %>
+      <%= link "Add a pizza", "/pizzas/new", class: "button button-secondary" %>
+    <% end %>
+  </header>
+
+  <div class="pizza-grid">
+    <% pizzas.each do |pizza| %>
+      <article class="pizza-card">
+        <div class="pizza-card-heading">
+          <h3><%= link pizza.name, "/pizzas/#{pizza.id}" %></h3>
+          <strong>&pound;<%= pizza.price %></strong>
+        </div>
+        <p><%= pizza.description %></p>
+        <div class="pizza-card-footer">
+          <% if pizza.vegetarian %><span class="diet-label">Vegetarian</span><% end %>
+          <%= link "View pizza", "/pizzas/#{pizza.id}" %>
+        </div>
+      </article>
+    <% end %>
+  </div>
+
+  <% if pizzas.empty? %>
+    <div class="empty-state">
+      <h3>The oven is warming up</h3>
+      <p>There are no pizzas on the menu yet.</p>
+    </div>
+  <% end %>
+</section>

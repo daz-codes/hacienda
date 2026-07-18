@@ -1,116 +1,51 @@
 # frozen_string_literal: true
 
-require "json"
-
 module Todos
-  module Index
-    def self.respond(context, _params)
-      path = context.path
-      filter = path == "/active" ? "active" : path == "/completed" ? "completed" : "all"
-      todos = Repository.all
-
-      {
-        todos: todos,
-        todos_json: JSON.generate(todos.map(&:to_h)),
-        filter: filter,
-        new_todo: Todo.new,
-        errors: [],
-        remaining_count: Repository.remaining_count,
-        completed_count: Repository.completed_count
-      }
+  class Actions < Hacienda::Actions
+    def index(context, _params)
+      IndexPage.new(filter: filter_for(context.path)).locals
     end
-  end
 
-  module Create
-    def self.respond(context, params)
-      attributes = params.permit(:title)
-      todo = Todo.new(title: attributes[:title].to_s)
-      return render_index(context, todo, todo.errors) if todo.invalid?
+    def create(context, params)
+      todo = Todo.new(title: params.permit(:title)[:title].to_s)
+      return render_index(new_todo: todo, errors: todo.errors) if todo.invalid?
 
       Repository.save(todo)
       context.flash[:notice] = "Todo added."
       redirect "/"
     end
 
-    def self.render_index(context, todo, errors)
-      todos = Repository.all
-      render :index,
-        todos: todos,
-        todos_json: JSON.generate(todos.map(&:to_h)),
-        filter: "all",
-        new_todo: todo,
-        errors: errors,
-        remaining_count: Repository.remaining_count,
-        completed_count: Repository.completed_count,
-        status: 422
-    end
-  end
-
-  module Toggle
-    def self.respond(context, params)
+    def update_title(context, params)
       todo = Repository.find(params[:id])
-      todo.toggle
-      Repository.save(todo)
-
-      context.flash[:notice] = todo.completed? ? "Todo completed." : "Todo reactivated."
-      redirect context.request.referer || "/"
-    end
-  end
-
-  module ToggleAll
-    def self.respond(context, _params)
-      if Repository.remaining_count.zero?
-        Repository.activate_all
-        context.flash[:notice] = "All todos are active."
-      else
-        Repository.complete_all
-        context.flash[:notice] = "All todos are complete."
-      end
-
-      redirect context.request.referer || "/"
-    end
-  end
-
-  module UpdateTitle
-    def self.respond(context, params)
-      todo = Repository.find(params[:id])
-      attributes = params.permit(:title)
-      todo.title = attributes[:title].to_s
-      return render_index(context, todo, todo.errors) if todo.invalid?
+      todo.title = params.permit(:title)[:title].to_s
+      return render_index(editing_todo: todo, errors: todo.errors) if todo.invalid?
 
       Repository.save(todo)
       context.flash[:notice] = "Todo renamed."
-      redirect context.request.referer || "/"
+      redirect_back(context)
     end
 
-    def self.render_index(_context, todo, errors)
-      todos = Repository.all
-      render :index,
-        todos: todos,
-        todos_json: JSON.generate(todos.map(&:to_h)),
-        filter: "all",
-        new_todo: Todo.new,
-        editing_todo: todo,
-        errors: errors,
-        remaining_count: Repository.remaining_count,
-        completed_count: Repository.completed_count,
-        status: 422
-    end
-  end
-
-  module Destroy
-    def self.respond(context, params)
+    def destroy(context, params)
       Repository.delete(Repository.find(params[:id]))
       context.flash[:notice] = "Todo deleted."
-      redirect context.request.referer || "/"
+      redirect_back(context)
     end
-  end
 
-  module ClearCompleted
-    def self.respond(context, _params)
-      count = Repository.clear_completed
-      context.flash[:notice] = "#{count} completed #{count == 1 ? "todo" : "todos"} cleared."
-      redirect "/"
+    private
+
+    def filter_for(path)
+      return "active" if path == "/active"
+      return "completed" if path == "/completed"
+
+      "all"
+    end
+
+    def render_index(**locals)
+      render :index, **IndexPage.new(**locals).locals, status: 422
+    end
+
+    def redirect_back(context)
+      redirect context.request.referer || "/"
     end
   end
 end

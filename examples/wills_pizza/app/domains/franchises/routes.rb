@@ -1,0 +1,1 @@
+get "/franchises", :index

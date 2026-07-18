@@ -3,7 +3,7 @@
 <section
   class="todoapp"
   data-helium
-  @import="/assets/todos.js"
+  @import="<%= asset_path "todos.js" %>"
   @data='<%= {
     todos: JSON.parse(todos_json),
     filter: filter,

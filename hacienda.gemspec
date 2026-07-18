@@ -12,10 +12,17 @@ Gem::Specification.new do |spec|
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2"
 
-  spec.files = Dir["lib/**/*", "exe/*", "docs/**/*", "README.md", "LICENSE.txt"]
+  spec.files = Dir["lib/**/*", "exe/*", "docs/**/*", "CHANGELOG.md", "README.md", "SECURITY.md", "LICENSE.txt"]
   spec.bindir = "exe"
   spec.executables = %w[hac fac]
   spec.require_paths = ["lib"]
+  spec.metadata = {
+    "bug_tracker_uri" => "https://github.com/hacienda-rb/hacienda/issues",
+    "changelog_uri" => "https://github.com/hacienda-rb/hacienda/blob/main/CHANGELOG.md",
+    "documentation_uri" => "https://github.com/hacienda-rb/hacienda/tree/main/docs",
+    "rubygems_mfa_required" => "true",
+    "source_code_uri" => "https://github.com/hacienda-rb/hacienda"
+  }
 
   spec.add_dependency "mail", ">= 2.8", "< 3"
   spec.add_dependency "rack", ">= 3.1", "< 4"

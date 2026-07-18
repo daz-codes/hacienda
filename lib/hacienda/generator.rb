@@ -7,6 +7,19 @@ module Hacienda
   class Generator
     class Error < StandardError; end
 
+    HELIUM_ASSETS = %w[
+      helium.js
+      helium-csp.js
+      helium-sse.js
+      helium-csp-sse.js
+      jexpr.js
+    ].freeze
+    FRAMEWORK_ASSETS = %w[
+      hacienda-navigation.js
+      idiomorph.esm.js
+      IDIOMORPH-LICENSE.txt
+    ].freeze
+
     def initialize(target:, source_root:, cwd:)
       @target = target
       @source_root = source_root
@@ -14,8 +27,9 @@ module Hacienda
     end
 
     def new_app
+      created_target = false
       refuse_existing_target
-      @created_target = true
+      created_target = true
       create_directories
       write_files
       write_credentials
@@ -23,7 +37,7 @@ module Hacienda
       copy_navigation_assets
       @target
     rescue
-      FileUtils.rm_rf(@target) if @created_target && File.directory?(@target)
+      FileUtils.rm_rf(@target) if created_target && File.directory?(@target)
       raise
     end
 
@@ -35,34 +49,41 @@ module Hacienda
 
       FileUtils.mkdir_p(File.join(root, "actions"))
       FileUtils.mkdir_p(File.join(root, "views", "components"))
+      FileUtils.mkdir_p(domain_test_root(domain))
       write_new(File.join(root, "routes.rb"), "# Routes for #{namespace}\n")
+      write_new(File.join(root, "actions.rb"), action_set_template(namespace))
       write_new(File.join(root, "repository.rb"), repository_stub(namespace))
-      touch(File.join(root, "actions", ".keep"))
       touch(File.join(root, "views", "components", ".keep"))
+      touch(File.join(domain_test_root(domain), ".keep"))
       root
     end
 
-    def generate_action(domain_name, action_name, inline: false)
+    def generate_action(domain_name, action_name, group: nil)
       ensure_application!
       domain = normalize_name(domain_name)
       action = normalize_name(action_name)
       namespace = camelize(domain)
+      group = normalize_name(group) if group
       generate_domain(domain) unless File.directory?(domain_root(domain))
 
-      destination = if inline
-        actions_file = File.join(domain_root(domain), "actions.rb")
-        append_inline_action(actions_file, action_template(namespace, camelize(action), wrapper: false))
+      destination = if group
+        class_name = "#{camelize(group)}Actions"
+        actions_file = File.join(domain_root(domain), "actions", "#{group}_actions.rb")
+        write_new(actions_file, action_set_template(namespace, class_name:)) unless File.exist?(actions_file)
+        append_action_method(actions_file, action_method_template(action))
         actions_file
       else
-        File.join(domain_root(domain), "actions", "#{action}.rb").tap do |path|
-          write_new(path, action_template(namespace, camelize(action)))
-        end
+        actions_file = File.join(domain_root(domain), "actions.rb")
+        write_new(actions_file, action_set_template(namespace)) unless File.exist?(actions_file)
+        append_action_method(actions_file, action_method_template(action))
+        actions_file
       end
-      append_route_example(domain, action)
+      append_route_example(domain, action, group:)
+      write_action_test(domain, action, group:)
       destination
     end
 
-    def generate_rest(name, split_actions: false)
+    def generate_rest(name)
       ensure_application!
       domain = normalize_name(name)
       namespace = camelize(domain)
@@ -80,25 +101,17 @@ module Hacienda
       write_new(File.join(domain_root(domain), "#{entity}.rb"), entity_template(namespace, entity_class))
       File.write(File.join(domain_root(domain), "repository.rb"), rest_repository(namespace, entity_class, domain))
 
-      if split_actions
-        %w[index show new create edit update destroy].each do |action|
-          write_new(
-            File.join(domain_root(domain), "actions", "#{action}.rb"),
-            rest_action(namespace, entity, entity_class, domain, action)
-          )
-        end
-      else
-        File.write(
-          File.join(domain_root(domain), "actions.rb"),
-          rest_actions(namespace, entity, entity_class, domain)
-        )
-      end
+      File.write(
+        File.join(domain_root(domain), "actions.rb"),
+        rest_actions(namespace, entity, entity_class, domain)
+      )
 
       rest_views(domain, entity).each do |view, content|
         write_new(File.join(domain_root(domain), "views", view), content)
       end
 
       write_new(migration_path("create_#{domain}"), rest_migration(domain))
+      write_rest_tests(domain, namespace, entity, entity_class)
       domain_root(domain)
     end
 
@@ -115,12 +128,11 @@ module Hacienda
       write_new(File.join(root, "repository.rb"), auth_repository)
       write_new(File.join(root, "session.rb"), auth_session)
       write_new(File.join(root, "mailer.rb"), auth_mailer)
+      write_new(File.join(root, "token_verifier.rb"), auth_token_verifier)
       write_new(File.join(root, "load_current_user.rb"), auth_context_loader)
       write_new(File.join(root, "required.rb"), auth_guard)
 
-      auth_actions.each do |name, content|
-        write_new(File.join(root, "actions", "#{name}.rb"), content)
-      end
+      write_new(File.join(root, "actions.rb"), auth_action_set)
       auth_views.each do |name, content|
         write_new(File.join(root, "views", "#{name}.erb"), content)
       end
@@ -129,6 +141,7 @@ module Hacienda
       ensure_gem(%(gem "bcrypt", "~> 3.1"))
       ensure_session_middleware
       ensure_context_loader("Auth::LoadCurrentUser")
+      write_auth_tests
       root
     end
 
@@ -158,6 +171,7 @@ module Hacienda
         db/migrations
         log
         public/assets
+        test/domains/home
         test/integration
       ].each { |path| FileUtils.mkdir_p(File.join(@target, path)) }
     end
@@ -169,26 +183,12 @@ module Hacienda
     end
 
     def copy_helium
-      source = helium_source
-      unless source
-        raise Error, <<~MESSAGE.strip
-          Helium was not found. Set HELIUM_PATH to helium.js, place the Helium
-          repository beside Hacienda, or run: npm install @daz4126/helium
-        MESSAGE
-      end
-
-      sources = %w[
-        helium.js
-        helium-csp.js
-        helium-sse.js
-        helium-csp-sse.js
-        jexpr.js
-      ].to_h do |name|
-        [name, File.join(File.dirname(source), name)]
-      end
+      source_root, license = helium_asset_source
+      sources = HELIUM_ASSETS.to_h { |name| [name, File.join(source_root, name)] }
+      sources["HELIUM-LICENSE.txt"] = license
       missing = sources.reject { |_name, path| File.file?(path) }.keys
       unless missing.empty?
-        raise Error, "Helium CSP assets were not found beside #{source}: #{missing.join(", ")}"
+        raise Error, "Helium assets are incomplete in #{source_root}: #{missing.join(", ")}"
       end
 
       sources.each do |name, path|
@@ -198,21 +198,25 @@ module Hacienda
 
     def copy_navigation_assets
       source = File.join(@source_root, "lib", "hacienda", "assets")
-      %w[hacienda-navigation.js idiomorph.esm.js IDIOMORPH-LICENSE.txt].each do |name|
+      FRAMEWORK_ASSETS.each do |name|
         FileUtils.cp(File.join(source, name), File.join(@target, "public", "assets", name))
       end
     end
 
-    def helium_source
-      candidates = [
-        ENV["HELIUM_PATH"],
-        File.join(@source_root, "..", "helium", "helium.js"),
-        File.join(@cwd, "helium", "helium.js"),
-        File.join(@cwd, "..", "helium", "helium.js"),
-        File.join(@cwd, "node_modules", "@daz4126", "helium", "helium.js")
-      ].compact
+    def helium_asset_source
+      override = ENV["HELIUM_PATH"]
+      if override
+        helium = File.expand_path(override, @cwd)
+        unless File.file?(helium)
+          raise Error, "HELIUM_PATH does not point to helium.js: #{helium}"
+        end
 
-      candidates.find { |path| File.file?(path) }
+        root = File.dirname(helium)
+        return [root, File.join(root, "LICENSE")]
+      end
+
+      root = File.join(@source_root, "lib", "hacienda", "assets")
+      [root, File.join(root, "HELIUM-LICENSE.txt")]
     end
 
     def files
@@ -241,8 +245,7 @@ module Hacienda
         "db/migrations/20260629000000_create_hacienda_runtime.rb" => durable_runtime_migration,
         "db/seeds.rb" => "# Add explicit application seed data here.\n",
         "app/domains/home/routes.rb" => %(get "/", :index\nget "/up", :up\n),
-        "app/domains/home/actions/index.rb" => home_action,
-        "app/domains/home/actions/up.rb" => health_action,
+        "app/domains/home/actions.rb" => home_actions,
         "app/domains/home/views/index.erb" => home_view,
         "app/domains/home/views/components/_feature.erb" => feature_component,
         "app/errors/404.erb" => not_found_view,
@@ -250,7 +253,8 @@ module Hacienda
         "app/layouts/application.erb" => layout,
         "public/assets/application.css" => stylesheet,
         "test/test_helper.rb" => test_helper,
-        "test/integration/home_test.rb" => home_integration_test,
+        "test/domains/home/actions_test.rb" => home_actions_test,
+        "test/integration/.keep" => "",
         ".gitignore" => "/.bundle\n/db/*.sqlite3\n/log\n/storage\n/tmp\n/config/master.key\n",
         "README.md" => app_readme
       }
@@ -321,6 +325,7 @@ module Hacienda
             rm -rf /usr/local/bundle/cache /usr/local/bundle/ruby/*/cache
 
         COPY . .
+        RUN bundle exec hac assets:precompile
 
         FROM base
 
@@ -470,6 +475,21 @@ module Hacienda
             puts "Database seed complete."
           end
         end
+
+
+        namespace :assets do
+          desc "Compile fingerprinted production assets"
+          task :precompile do
+            manifest = Hacienda::Assets.precompile(root: APP_ROOT)
+            puts "Compiled \#{manifest.fetch("assets").length} assets."
+          end
+
+          desc "Remove fingerprinted production assets"
+          task :clobber do
+            count = Hacienda::Assets.clobber(root: APP_ROOT)
+            puts "Removed \#{count} compiled assets and the asset manifest."
+          end
+        end
       RUBY
     end
 
@@ -485,6 +505,13 @@ module Hacienda
         raise "HACIENDA_SESSION_EXPIRE_AFTER must be positive" unless session_expire_after.positive?
         session_store = ENV.fetch("HACIENDA_SESSION_STORE", "cookie")
 
+        use Hacienda::Middleware::RequestLimits,
+          max_body_bytes: Integer(ENV.fetch("HACIENDA_MAX_REQUEST_BYTES", 10 * 1024 * 1024)),
+          max_query_bytes: Integer(ENV.fetch("HACIENDA_MAX_QUERY_BYTES", 64 * 1024)),
+          max_multipart_files: Integer(ENV.fetch("HACIENDA_MAX_MULTIPART_FILES", 16)),
+          max_multipart_parts: Integer(ENV.fetch("HACIENDA_MAX_MULTIPART_PARTS", 128)),
+          max_parameters: Integer(ENV.fetch("HACIENDA_MAX_PARAMETERS", 1024)),
+          max_parameter_depth: Integer(ENV.fetch("HACIENDA_MAX_PARAMETER_DEPTH", 16))
         allowed_hosts = ENV.fetch("HACIENDA_ALLOWED_HOSTS", "").split(",").map(&:strip).reject(&:empty?)
         allowed_hosts = [Hacienda.app_host] if allowed_hosts.empty? && Hacienda.env.production?
         use Hacienda::Middleware::HostAuthorization, hosts: allowed_hosts
@@ -509,6 +536,9 @@ module Hacienda
             }
           ]
         use Rack::Head
+        use Hacienda::Middleware::PendingMigrations,
+          database: DB,
+          directory: File.join(APP_ROOT, "db", "migrations")
         case session_store
         when "cookie"
           session_secret = ENV["HACIENDA_SESSION_SECRET"] || ENV["SESSION_SECRET"]
@@ -543,7 +573,7 @@ module Hacienda
         use Hacienda::Middleware::CSRF
         use Rack::MethodOverride
         use Hacienda::Middleware::StorageFiles, storage: APP.storage
-        use Rack::Static, urls: ["/assets"], root: File.join(APP_ROOT, "public")
+        use Rack::Static, **Hacienda::Assets.rack_options(root: APP_ROOT)
         use Hacienda::Middleware::RequestLogger
 
         map "/hac/jobs" do
@@ -551,6 +581,10 @@ module Hacienda
             application: APP,
             recurring_path: File.join(APP_ROOT, "config", "recurring.yml")
           )
+        end
+
+        map "/hac/mail" do
+          run Hacienda::Mailer::Inbox.new(root: APP_ROOT)
         end
 
         map "/" do
@@ -929,16 +963,14 @@ module Hacienda
       YAML
     end
 
-    def home_action
-      <<~RUBY
-        # frozen_string_literal: true
+    def home_actions
+      action_set_template("Home", <<~RUBY)
+        def index(_context, _params)
+          {framework: "Hacienda", command: "hac"}
+        end
 
-        module Home
-          module Index
-            def self.respond(_context, _params)
-              {framework: "Hacienda", command: "hac"}
-            end
-          end
+        def up(_context, _params)
+          text "OK"
         end
       RUBY
     end
@@ -956,9 +988,21 @@ module Hacienda
         require "securerandom"
         require "sequel"
         require "sequel/extensions/migration"
+        require "tmpdir"
+        require "fileutils"
 
         TEST_ROOT = File.expand_path("..", __dir__) unless defined?(TEST_ROOT)
+        test_database_directory = unless ENV["DATABASE_URL"]
+          Dir.mktmpdir("hacienda-test").tap do |directory|
+            ENV["DATABASE_URL"] = "sqlite://\#{File.join(directory, "test.sqlite3")}"
+          end
+        end
         TEST_APP = Rack::Builder.parse_file(File.join(TEST_ROOT, "config.ru")) unless defined?(TEST_APP)
+
+        Minitest.after_run do
+          APP.database&.disconnect
+          FileUtils.rm_rf(test_database_directory) if test_database_directory
+        end
 
         migrations = File.join(TEST_ROOT, "db", "migrations")
         if Dir[File.join(migrations, "*.rb")].any?
@@ -994,13 +1038,13 @@ module Hacienda
       RUBY
     end
 
-    def home_integration_test
+    def home_actions_test
       <<~RUBY
         # frozen_string_literal: true
 
-        require_relative "../test_helper"
+        require_relative "../../test_helper"
 
-        class HomeTest < ApplicationTest
+        class HomeActionsTest < ApplicationTest
           def test_home_page
             get "/"
 
@@ -1013,20 +1057,6 @@ module Hacienda
 
             assert_equal 200, last_response.status
             assert_equal "OK", last_response.body
-          end
-        end
-      RUBY
-    end
-
-    def health_action
-      <<~RUBY
-        # frozen_string_literal: true
-
-        module Home
-          module Up
-            def self.respond(_context, _params)
-              text "OK"
-            end
           end
         end
       RUBY
@@ -1160,6 +1190,10 @@ module Hacienda
       File.join(@target, "app", "domains", domain)
     end
 
+    def domain_test_root(domain)
+      File.join(@target, "test", "domains", domain)
+    end
+
     def write_new(path, content)
       raise Error, "file already exists: #{path}" if File.exist?(path)
 
@@ -1183,31 +1217,38 @@ module Hacienda
       RUBY
     end
 
-    def action_template(namespace, action, wrapper: true)
-      action_body = <<~RUBY
-        module #{action}
-          def self.respond(_context, _params)
-            {}
-          end
-        end
-      RUBY
-      return action_body unless wrapper
-
-      wrap_domain_module(namespace, action_body)
+    def action_method_template(action, body: "{}")
+      "def #{action}(_context, _params)\n#{indent(body, 2)}\nend\n"
     end
 
-    def append_inline_action(actions_file, action_body)
-      if File.exist?(actions_file) && !File.read(actions_file).strip.empty?
-        existing = File.read(actions_file)
-        insertion = "\n#{indent(action_body, 2)}"
-        closing_end = existing.rindex(/^end\s*$/)
-        raise Error, "could not append action to malformed file: #{actions_file}" unless closing_end
+    def action_set_template(namespace, body = "", class_name: "Actions")
+      methods = body.to_s.rstrip
+      [
+        "# frozen_string_literal: true\n\n",
+        "module #{namespace}\n",
+        "  class #{class_name} < Hacienda::Actions\n",
+        methods.empty? ? "" : "#{indent(methods, 4)}\n",
+        "  end\n",
+        "end\n"
+      ].join
+    end
 
-        File.write(actions_file, "#{existing[0...closing_end]}#{insertion}#{existing[closing_end..]}")
-      else
-        namespace = camelize(File.basename(File.dirname(actions_file)))
-        write_new(actions_file, wrap_domain_module(namespace, action_body))
-      end
+    def append_action_method(actions_file, action_body)
+      existing = File.read(actions_file)
+      class_end = existing.rindex(/^  end\s*$/)
+      raise Error, "could not append action to malformed file: #{actions_file}" unless class_end
+
+      insertion = "\n#{indent(action_body.rstrip, 4)}\n"
+      File.write(actions_file, "#{existing[0...class_end]}#{insertion}#{existing[class_end..]}")
+    end
+
+    def append_test_method(test_file, method_body)
+      existing = File.read(test_file)
+      class_end = existing.rindex(/^end\s*$/)
+      raise Error, "could not append test to malformed file: #{test_file}" unless class_end
+
+      insertion = "\n#{indent(method_body.rstrip, 2)}\n"
+      File.write(test_file, "#{existing[0...class_end]}#{insertion}#{existing[class_end..]}")
     end
 
     def wrap_domain_module(namespace, body)
@@ -1225,14 +1266,47 @@ module Hacienda
       text.lines.map { |line| line.strip.empty? ? line : "#{padding}#{line}" }.join
     end
 
-    def append_route_example(domain, action)
+    def append_route_example(domain, action, group: nil)
       routes = File.join(domain_root(domain), "routes.rb")
+      action_set = group ? ", actions: :#{group}" : ""
       example = <<~RUBY
 
         # Choose the HTTP verb and path for this action:
-        # post "/#{domain}/:id/#{action}", :#{action}
+        # post "/#{domain}/:id/#{action}", :#{action}#{action_set}
       RUBY
       File.open(routes, "a") { |file| file.write(example) }
+    end
+
+    def write_action_test(domain, action, group: nil)
+      FileUtils.rm_f(File.join(domain_test_root(domain), ".keep"))
+      namespace = camelize(domain)
+      class_name = group ? "#{camelize(group)}Actions" : "Actions"
+      test_class = "#{namespace}#{class_name}Test"
+      path = File.join(
+        domain_test_root(domain),
+        group ? "#{group}_actions_test.rb" : "actions_test.rb"
+      )
+      method_body = <<~RUBY
+        def test_#{action}_returns_view_locals
+          result = #{namespace}::#{class_name}.new.#{action}(nil, Hacienda::Params.new({}))
+
+          assert_equal({}, result)
+        end
+      RUBY
+
+      if File.exist?(path)
+        append_test_method(path, method_body)
+      else
+        write_new(path, <<~RUBY)
+          # frozen_string_literal: true
+
+          require_relative "../../test_helper"
+
+          class #{test_class} < Minitest::Test
+          #{indent(method_body.rstrip, 2)}
+          end
+        RUBY
+      end
     end
 
     def rest_routes(domain)
@@ -1307,19 +1381,17 @@ module Hacienda
       RUBY
     end
 
-    def rest_action(namespace, entity, entity_class, domain, action)
-      wrap_domain_module(namespace, rest_action_body(entity, entity_class, domain, action))
-    end
-
     def rest_actions(namespace, entity, entity_class, domain)
       actions = %w[index show new create edit update destroy].map do |action|
-        rest_action_body(entity, entity_class, domain, action)
+        body = rest_action_code(entity, entity_class, domain, action)
+        context = body.include?("context.") ? "context" : "_context"
+        "def #{action}(#{context}, params)\n#{indent(body, 2)}\nend\n"
       end.join("\n")
-      wrap_domain_module(namespace, actions)
+      action_set_template(namespace, actions)
     end
 
-    def rest_action_body(entity, entity_class, domain, action)
-      body = case action
+    def rest_action_code(entity, entity_class, domain, action)
+      case action
       when "index"
         "{#{domain}: Repository.all}"
       when "show"
@@ -1361,15 +1433,6 @@ module Hacienda
           redirect "/#{domain}"
         RUBY
       end
-      context_argument = body.include?("context.") ? "context" : "_context"
-
-      <<~RUBY
-        module #{camelize(action)}
-          def self.respond(#{context_argument}, params)
-        #{indent(body, 4)}
-          end
-        end
-      RUBY
     end
 
     def rest_views(domain, entity)
@@ -1455,6 +1518,98 @@ module Hacienda
       RUBY
     end
 
+    def write_rest_tests(domain, namespace, entity, entity_class)
+      FileUtils.rm_f(File.join(domain_test_root(domain), ".keep"))
+      tests = {
+        "#{entity}_test.rb" => rest_entity_test(namespace, entity_class),
+        "repository_test.rb" => rest_repository_test(domain, namespace, entity_class),
+        "actions_test.rb" => rest_actions_test(domain, namespace, entity)
+      }
+      tests.each do |name, content|
+        path = File.join(domain_test_root(domain), name)
+        File.exist?(path) ? File.write(path, content) : write_new(path, content)
+      end
+    end
+
+    def rest_entity_test(namespace, entity_class)
+      <<~RUBY
+        # frozen_string_literal: true
+
+        require_relative "../../test_helper"
+
+        class #{namespace}#{entity_class}Test < Minitest::Test
+          def test_title_and_body_are_required
+            record = #{namespace}::#{entity_class}.new
+
+            refute record.valid?
+            assert_includes record.errors.full_messages, "Title is required"
+            assert_includes record.errors.full_messages, "Body is required"
+          end
+
+          def test_complete_record_is_valid
+            record = #{namespace}::#{entity_class}.new(title: "First", body: "Useful body")
+
+            assert record.valid?
+          end
+        end
+      RUBY
+    end
+
+    def rest_repository_test(domain, namespace, entity_class)
+      <<~RUBY
+        # frozen_string_literal: true
+
+        require_relative "../../test_helper"
+
+        class #{namespace}RepositoryTest < Minitest::Test
+          def setup
+            APP.database[:#{domain}].delete
+          end
+
+          def test_saved_records_can_be_found
+            record = #{namespace}::#{entity_class}.new(title: "Saved", body: "Repository contract")
+
+            #{namespace}::Repository.save(record)
+            found = #{namespace}::Repository.find(record.id)
+
+            assert_equal record.id, found.id
+            assert_equal "Saved", found.title
+          end
+        end
+      RUBY
+    end
+
+    def rest_actions_test(domain, namespace, entity)
+      <<~RUBY
+        # frozen_string_literal: true
+
+        require_relative "../../test_helper"
+
+        class #{namespace}ActionsTest < ApplicationTest
+          def setup
+            super
+            database[:#{domain}].delete
+          end
+
+          def test_create_redirects_to_the_persisted_record
+            post "/#{domain}", {
+              _csrf: csrf_token,
+              title: "Created through HTTP",
+              body: "Domain action contract"
+            }
+
+            assert_equal 303, last_response.status
+            record = database[:#{domain}].first
+            assert_equal "/#{domain}/\#{record[:id]}", last_response["location"]
+
+            get last_response["location"]
+            assert_equal 200, last_response.status
+            assert_includes last_response.body, "Created through HTTP"
+          end
+        end
+      RUBY
+    end
+
     def migration_template(name)
       <<~RUBY
         # frozen_string_literal: true
@@ -1514,6 +1669,15 @@ module Hacienda
 
         module Auth
           module PasswordAuthenticatable
+            DUMMY_PASSWORD_DIGEST = "$2a$12$GEDdi5Vp3yrzDzr9JV4kM.kmreQ90Btoz.Py/9ZJdy/g5IumqMy0q"
+
+            def self.credentials_match?(user, value, password_class: BCrypt::Password)
+              digest = user&.password_digest.to_s
+              digest = DUMMY_PASSWORD_DIGEST unless password_class.valid_hash?(digest)
+              matches = password_class.new(digest) == value.to_s
+              !!user && matches
+            end
+
             def password=(value)
               self.password_digest = BCrypt::Password.create(value).to_s
             end
@@ -1722,260 +1886,211 @@ module Hacienda
       RUBY
     end
 
-    def auth_actions
-      {
-        "login" => <<~RUBY,
-          module Auth
-            module Login
-              def self.respond(_context, _params)
-                {email: "", error: nil}
+    def auth_token_verifier
+      <<~RUBY
+        # frozen_string_literal: true
+
+        module Auth
+          module TokenVerifier
+            module_function
+
+            def magic_login(token)
+              verified_user(token, purpose: "magic_login") do |user, payload|
+                user.email_verified? && user.magic_login_version.to_i == payload["magic_login_version"].to_i
               end
             end
-          end
-        RUBY
-        "authenticate" => <<~RUBY,
-          module Auth
-            module Authenticate
-              def self.respond(context, params)
-                credentials = params.permit(:email, :password)
-                user = Repository.find_by_email(credentials[:email])
 
-                if user&.authenticate(credentials[:password].to_s) && user.email_verified?
-                  Session.login(context, user)
-                  context.flash[:notice] = "Logged in."
-                  redirect "/"
-                else
-                  render :login,
-                    email: credentials[:email].to_s,
-                    error: "Invalid email or password",
-                    status: 422
-                end
+            def email_verification(token)
+              verified_user(token, purpose: "email_verification") do |user, payload|
+                !user.email_verified? && user.email == payload["email"]
               end
             end
-          end
-        RUBY
-        "magic_login" => <<~RUBY,
-          module Auth
-            module MagicLogin
-              def self.respond(_context, _params)
-                {email: ""}
+
+            def password_reset(token)
+              verified_user(token, purpose: "password_reset") do |user, payload|
+                user.password_reset_version.to_i == payload["password_reset_version"].to_i
               end
             end
-          end
-        RUBY
-        "send_magic_link" => <<~RUBY,
-          module Auth
-            module SendMagicLink
-              def self.respond(context, params)
-                attributes = params.permit(:email)
-                user = Repository.find_by_email(attributes[:email])
 
-                if user&.email_verified?
-                  user.rotate_magic_login_version
-                  Repository.save(user)
-                  Mailer.magic_login_email(context, user).deliver_later
-                end
-
-                context.flash[:notice] = "If that email can sign in, we sent a login link."
-                redirect "/login"
-              end
+            def verified_user(token, purpose:)
+              payload = Hacienda.signed_token.verify(token, purpose:)
+              user = payload && Repository.find(payload["user_id"])
+              user if user && yield(user, payload)
             end
+            private_class_method :verified_user
           end
-        RUBY
-        "confirm_magic_link" => <<~RUBY,
-          module Auth
-            module ConfirmMagicLink
-              def self.respond(_context, params)
-                attributes = params.permit(:token)
-                payload = Hacienda.signed_token.verify(attributes[:token], purpose: "magic_login")
-                user = payload && Repository.find(payload["user_id"])
+        end
+      RUBY
+    end
 
-                unless user&.email_verified? && user.magic_login_version.to_i == payload["magic_login_version"].to_i
-                  return render(:magic_login_confirm, token: "", errors: ["Login link is invalid or expired."], status: 422)
-                end
+    def auth_action_set
+      <<~RUBY
+        # frozen_string_literal: true
 
-                {token: attributes[:token].to_s, errors: []}
-              end
+        module Auth
+          class Actions < Hacienda::Actions
+            def login(_context, _params)
+              {email: "", error: nil}
             end
-          end
-        RUBY
-        "complete_magic_login" => <<~RUBY,
-          module Auth
-            module CompleteMagicLogin
-              def self.respond(context, params)
-                attributes = params.permit(:token)
-                payload = Hacienda.signed_token.verify(attributes[:token], purpose: "magic_login")
-                user = payload && Repository.find(payload["user_id"])
 
-                unless user&.email_verified? && user.magic_login_version.to_i == payload["magic_login_version"].to_i
-                  return render(:magic_login_confirm, token: "", errors: ["Login link is invalid or expired."], status: 422)
-                end
+            def authenticate(context, params)
+              credentials = params.permit(:email, :password)
+              user = Repository.find_by_email(credentials[:email])
 
-                user.rotate_magic_login_version
-                Repository.save(user)
+              if PasswordAuthenticatable.credentials_match?(user, credentials[:password]) && user.email_verified?
                 Session.login(context, user)
                 context.flash[:notice] = "Logged in."
                 redirect "/"
+              else
+                render :login,
+                  email: credentials[:email].to_s,
+                  error: "Invalid email or password",
+                  status: 422
               end
             end
-          end
-        RUBY
-        "signup" => <<~RUBY,
-          module Auth
-            module Signup
-              def self.respond(_context, _params)
-                {email: "", errors: []}
-              end
-            end
-          end
-        RUBY
-        "create_account" => <<~RUBY,
-          module Auth
-            module CreateAccount
-              def self.respond(context, params)
-                attributes = params.permit(:email, :password)
-                password = attributes[:password].to_s
-                user = User.new(email: attributes[:email].to_s)
-                user.valid?(password:)
-                user.errors.add :email, "is already in use" if Repository.find_by_email(user.email)
-                return render(:signup, email: user.email, errors: user.errors, status: 422) if user.errors.any?
 
-                user.password = password
+            def magic_login(_context, _params)
+              {email: ""}
+            end
+
+            def send_magic_link(context, params)
+              attributes = params.permit(:email)
+              user = Repository.find_by_email(attributes[:email])
+
+              if user&.email_verified?
+                user.rotate_magic_login_version
+                Repository.save(user)
+                Mailer.magic_login_email(context, user).deliver_later
+              end
+
+              context.flash[:notice] = "If that email can sign in, we sent a login link."
+              redirect "/login"
+            end
+
+            def confirm_magic_link(_context, params)
+              attributes = params.permit(:token)
+              unless TokenVerifier.magic_login(attributes[:token])
+                return render(:magic_login_confirm, token: "", errors: ["Login link is invalid or expired."], status: 422)
+              end
+
+              render :magic_login_confirm, token: attributes[:token].to_s, errors: []
+            end
+
+            def complete_magic_login(context, params)
+              attributes = params.permit(:token)
+              user = TokenVerifier.magic_login(attributes[:token])
+              unless user
+                return render(:magic_login_confirm, token: "", errors: ["Login link is invalid or expired."], status: 422)
+              end
+
+              user.rotate_magic_login_version
+              Repository.save(user)
+              Session.login(context, user)
+              context.flash[:notice] = "Logged in."
+              redirect "/"
+            end
+
+            def signup(_context, _params)
+              {email: "", errors: []}
+            end
+
+            def create_account(context, params)
+              attributes = params.permit(:email, :password)
+              password = attributes[:password].to_s
+              user = User.new(email: attributes[:email].to_s)
+              user.valid?(password:)
+              user.password = password if user.errors.empty?
+              return render(:signup, email: user.email, errors: user.errors, status: 422) if user.errors.any?
+
+              existing = Repository.find_by_email(user.email)
+              if existing
+                Mailer.verification_email(context, existing).deliver_later unless existing.email_verified?
+              else
                 Repository.save(user)
                 Mailer.verification_email(context, user).deliver_later
-                context.flash[:notice] = "Account created. Check your email to verify your account."
-                redirect "/login"
               end
+              context.flash[:notice] = "If that email can be registered, we sent account instructions."
+              redirect "/login"
+            end
+
+            def verify_email(_context, params)
+              attributes = params.permit(:token)
+              unless TokenVerifier.email_verification(attributes[:token])
+                return render(:verify_email, token: "", errors: ["Verification link is invalid or expired."], status: 422)
+              end
+
+              {token: attributes[:token].to_s, errors: []}
+            end
+
+            def confirm_email(context, params)
+              attributes = params.permit(:token)
+              user = TokenVerifier.email_verification(attributes[:token])
+              unless user
+                return render(:verify_email, token: "", errors: ["Verification link is invalid or expired."], status: 422)
+              end
+
+              user.verify_email
+              Repository.save(user)
+              Session.login(context, user)
+              context.flash[:notice] = "Email verified."
+              redirect "/"
+            end
+
+            def send_verification_email(context, params)
+              attributes = params.permit(:email)
+              user = Repository.find_by_email(attributes[:email])
+              Mailer.verification_email(context, user).deliver_later if user && !user.email_verified?
+              context.flash[:notice] = "If that email needs verification, we sent a link."
+              redirect "/login"
+            end
+
+            def forgot_password(_context, _params)
+              {email: ""}
+            end
+
+            def send_password_reset(context, params)
+              attributes = params.permit(:email)
+              user = Repository.find_by_email(attributes[:email])
+              Mailer.password_reset_email(context, user).deliver_later if user
+              context.flash[:notice] = "If that email exists, we sent a password reset link."
+              redirect "/login"
+            end
+
+            def reset_password(_context, params)
+              attributes = params.permit(:token)
+              unless TokenVerifier.password_reset(attributes[:token])
+                return render(:reset_password, token: "", errors: ["Password reset link is invalid or expired."], status: 422)
+              end
+
+              {token: attributes[:token].to_s, errors: []}
+            end
+
+            def update_password(context, params)
+              attributes = params.permit(:token, :password)
+              user = TokenVerifier.password_reset(attributes[:token])
+              unless user
+                return render(:reset_password, token: "", errors: ["Password reset link is invalid or expired."], status: 422)
+              end
+
+              password = attributes[:password].to_s
+              return render(:reset_password, token: attributes[:token].to_s, errors: user.errors, status: 422) if user.invalid?(password:)
+
+              user.password = password
+              user.rotate_password_reset_version
+              Repository.save(user)
+              Session.login(context, user)
+              context.flash[:notice] = "Password updated."
+              redirect "/"
+            end
+
+            def logout(context, _params)
+              Session.logout(context)
+              context.flash[:notice] = "Logged out."
+              redirect "/"
             end
           end
-        RUBY
-        "verify_email" => <<~RUBY,
-          module Auth
-            module VerifyEmail
-              def self.respond(context, params)
-                attributes = params.permit(:token)
-                payload = Hacienda.signed_token.verify(attributes[:token], purpose: "email_verification")
-                user = payload && Repository.find(payload["user_id"])
-
-                unless user && user.email == payload["email"]
-                  return render(:verify_email, token: "", errors: ["Verification link is invalid or expired."], status: 422)
-                end
-
-                {token: attributes[:token].to_s, errors: []}
-              end
-            end
-          end
-        RUBY
-        "confirm_email" => <<~RUBY,
-          module Auth
-            module ConfirmEmail
-              def self.respond(context, params)
-                attributes = params.permit(:token)
-                payload = Hacienda.signed_token.verify(attributes[:token], purpose: "email_verification")
-                user = payload && Repository.find(payload["user_id"])
-
-                unless user && user.email == payload["email"]
-                  return render(:verify_email, token: "", errors: ["Verification link is invalid or expired."], status: 422)
-                end
-
-                user.verify_email
-                Repository.save(user)
-                Session.login(context, user)
-                context.flash[:notice] = "Email verified."
-                redirect "/"
-              end
-            end
-          end
-        RUBY
-        "send_verification_email" => <<~RUBY,
-          module Auth
-            module SendVerificationEmail
-              def self.respond(context, params)
-                attributes = params.permit(:email)
-                user = Repository.find_by_email(attributes[:email])
-                Mailer.verification_email(context, user).deliver_later if user && !user.email_verified?
-                context.flash[:notice] = "If that email needs verification, we sent a link."
-                redirect "/login"
-              end
-            end
-          end
-        RUBY
-        "forgot_password" => <<~RUBY,
-          module Auth
-            module ForgotPassword
-              def self.respond(_context, _params)
-                {email: ""}
-              end
-            end
-          end
-        RUBY
-        "send_password_reset" => <<~RUBY,
-          module Auth
-            module SendPasswordReset
-              def self.respond(context, params)
-                attributes = params.permit(:email)
-                user = Repository.find_by_email(attributes[:email])
-                Mailer.password_reset_email(context, user).deliver_later if user
-                context.flash[:notice] = "If that email exists, we sent a password reset link."
-                redirect "/login"
-              end
-            end
-          end
-        RUBY
-        "reset_password" => <<~RUBY,
-          module Auth
-            module ResetPassword
-              def self.respond(_context, params)
-                attributes = params.permit(:token)
-                payload = Hacienda.signed_token.verify(attributes[:token], purpose: "password_reset")
-                user = payload && Repository.find(payload["user_id"])
-
-                unless user && user.password_reset_version.to_i == payload["password_reset_version"].to_i
-                  return render(:reset_password, token: "", errors: ["Password reset link is invalid or expired."], status: 422)
-                end
-
-                {token: attributes[:token].to_s, errors: []}
-              end
-            end
-          end
-        RUBY
-        "update_password" => <<~RUBY,
-          module Auth
-            module UpdatePassword
-              def self.respond(context, params)
-                attributes = params.permit(:token, :password)
-                payload = Hacienda.signed_token.verify(attributes[:token], purpose: "password_reset")
-                user = payload && Repository.find(payload["user_id"])
-
-                unless user && user.password_reset_version.to_i == payload["password_reset_version"].to_i
-                  return render(:reset_password, token: "", errors: ["Password reset link is invalid or expired."], status: 422)
-                end
-
-                password = attributes[:password].to_s
-                return render(:reset_password, token: attributes[:token].to_s, errors: user.errors, status: 422) if user.invalid?(password:)
-
-                user.password = password
-                user.rotate_password_reset_version
-                Repository.save(user)
-                Session.login(context, user)
-                context.flash[:notice] = "Password updated."
-                redirect "/"
-              end
-            end
-          end
-        RUBY
-        "logout" => <<~RUBY
-          module Auth
-            module Logout
-              def self.respond(context, _params)
-                Session.logout(context)
-                context.flash[:notice] = "Logged out."
-                redirect "/"
-              end
-            end
-          end
-        RUBY
-      }
+        end
+      RUBY
     end
 
     def auth_views
@@ -2076,6 +2191,72 @@ module Hacienda
               DateTime :created_at, null: false
               DateTime :updated_at, null: false
             end
+          end
+        end
+      RUBY
+    end
+
+    def write_auth_tests
+      FileUtils.mkdir_p(domain_test_root("auth"))
+      FileUtils.rm_f(File.join(domain_test_root("auth"), ".keep"))
+      write_new(File.join(domain_test_root("auth"), "user_test.rb"), auth_user_test)
+      write_new(File.join(domain_test_root("auth"), "actions_test.rb"), auth_actions_test)
+    end
+
+    def auth_user_test
+      <<~RUBY
+        # frozen_string_literal: true
+
+        require_relative "../../test_helper"
+
+        class AuthUserTest < Minitest::Test
+          def test_email_and_password_policy
+            user = Auth::User.new
+
+            refute user.valid?(password: "short")
+            assert_includes user.errors.full_messages, "Email is required"
+            assert_includes user.errors.full_messages, "Password must be at least 12 characters"
+          end
+
+          def test_one_time_token_versions_rotate
+            user = Auth::User.new(email: "person@example.com")
+
+            user.rotate_magic_login_version
+            user.rotate_password_reset_version
+
+            assert_equal 1, user.magic_login_version
+            assert_equal 1, user.password_reset_version
+          end
+        end
+      RUBY
+    end
+
+    def auth_actions_test
+      <<~RUBY
+        # frozen_string_literal: true
+
+        require_relative "../../test_helper"
+
+        class AuthActionsTest < ApplicationTest
+          def setup
+            super
+            database[:users].delete
+            Hacienda.clear_mail_deliveries
+          end
+
+          def test_signup_persists_an_unverified_user_and_sends_instructions
+            post "/signup", {
+              _csrf: csrf_token,
+              email: " Person@Example.com ",
+              password: "a-long-password"
+            }
+
+            assert_equal 303, last_response.status
+            assert_equal "/login", last_response["location"]
+            user = database[:users].first
+            assert_equal "person@example.com", user[:email]
+            assert_nil user[:email_verified_at]
+            assert_equal 1, Hacienda.mail_deliveries.length
           end
         end
       RUBY
@@ -2188,7 +2369,9 @@ module Hacienda
         ## Prepare the application
 
         Install dependencies and commit `Gemfile.lock`; the Docker build is
-        intentionally locked and will fail without it:
+        intentionally locked and will fail without it. The build also runs
+        `hac assets:precompile`, so the final image contains fingerprinted
+        assets and the production manifest:
 
         ```sh
         bundle install
@@ -2375,6 +2558,23 @@ module Hacienda
         bundle exec rackup -p 5151
         ```
 
+        Both startup paths check for pending migrations. `hac start` refuses
+        to boot and prints the pending filenames; direct Rack requests receive
+        an actionable development `503` page. Hacienda never migrates
+        automatically at web-process boot.
+
+        Development serves the readable source files in `public/assets`.
+        Production resolves asset helpers through a fingerprint manifest. The
+        generated Dockerfile compiles it automatically; for another deployment
+        method run:
+
+        ```sh
+        bundle exec hac assets:precompile
+        ```
+
+        Use `bundle exec hac assets:clobber` to remove compiled copies while
+        preserving the source files.
+
         Open a console with the application environment loaded:
 
         ```sh
@@ -2397,7 +2597,7 @@ module Hacienda
         busy-timeout, foreign keys, and unsafe synced-storage paths.
         `db:checkpoint` runs an explicit SQLite WAL checkpoint.
 
-        Run the generated Rack::Test integration suite:
+        Run the generated Minitest and Rack::Test suite:
 
         ```sh
         bundle exec rake test
@@ -2407,17 +2607,31 @@ module Hacienda
         the test environment, applies pending test-database migrations, and
         provides `ApplicationTest`, `database`, and `csrf_token` helpers.
 
-        List routes with their action modules and guards:
+        Keep focused tests beside their owning domain under
+        `test/domains/<domain>`: plain object tests call Ruby directly,
+        repository tests use the isolated database, and action tests may use
+        `ApplicationTest` for the Rack contract. Keep complete customer journeys
+        and cross-domain workflows under `test/integration`. These test paths
+        mirror production ownership without entering the `app/domains`
+        autoload tree. Domain generators create the mirrored directory; action,
+        REST, and authentication generators add executable behavior tests.
+
+        List routes with their action methods and guards:
 
         ```sh
         bundle exec hac routes
+        bundle exec hac routes --domain posts
+        bundle exec hac routes GET /posts/42
         ```
 
-        Routes live in `app/domains/*/routes.rb`. A route maps directly to an
-        action module and renders its matching ERB view when it returns a Hash.
-        Actions can be grouped in `app/domains/posts/actions.rb` or split into
-        `app/domains/posts/actions/show.rb` files. Hacienda checks `actions.rb`
-        first, then falls back to the split action file.
+        Business routes live only in `app/domains/*/routes.rb`; their file owns
+        the route and its action namespace. Rack infrastructure mounts stay in
+        `config.ru`. Hacienda rejects duplicate, structurally equivalent, and
+        equal-specificity ambiguous routes during boot and reload. By default a
+        route maps to a method on the domain's `Actions` class and renders its
+        matching ERB view when it returns a Hash. Additional multi-method action
+        sets can live in `app/domains/posts/actions/publishing_actions.rb` and
+        be selected with `actions: :publishing` in the route.
 
         Branded error pages live in `app/errors/404.erb` and
         `app/errors/500.erb`. They render through the application layout and
@@ -2432,7 +2646,11 @@ module Hacienda
         Actions receive request-scoped context separately from parameters:
 
         ```ruby
-        def self.respond(context, params)
+        module Posts
+          class Actions < Hacienda::Actions
+            def create(context, params)
+            end
+          end
         end
         ```
 
@@ -2445,6 +2663,11 @@ module Hacienda
 
         Malformed JSON returns `400 Bad Request`. Session-authenticated JSON
         writes send their CSRF token in the `X-CSRF-Token` header.
+
+        `Hacienda::Middleware::RequestLimits` bounds request bodies, query
+        strings, multipart parts/files, parameter count, and nesting. Override
+        the generated `HACIENDA_MAX_*` values when needed, and configure matching
+        proxy body limits plus slow-client read/header timeouts.
 
         The application cache is available as `context.cache` in actions and
         `APP.cache` elsewhere. Development and test use a bounded memory store;
@@ -2464,12 +2687,16 @@ module Hacienda
         blob = context.storage.store(
           params[:file],
           max_bytes: 5 * 1024 * 1024,
-          content_types: ["image/*"]
+          content_types: ["image/*"],
+          content_inspector: Hacienda::Storage::ContentTypeInspector.new
         )
         ```
 
         Local `/uploads` URLs are public and unguarded. Store private files
         behind an authenticated route or a remote service with signed URLs.
+        Filenames and declared media types are client supplied. Signature checks
+        do not make polyglots or compressed files safe; decode/scan them with
+        explicit resource limits when the application accepts those formats.
 
         Encrypted credentials live in `config/credentials.yml.enc`. Keep
         `config/master.key` local, or set `HACIENDA_MASTER_KEY` in production.
@@ -2491,8 +2718,9 @@ module Hacienda
         scope. CSP directives can use `:nonce`, and views can read the matching
         value with `csp_nonce context` for inline scripts or styles.
 
-        Mail writes to `tmp/mail` in development. Configure SMTP with env vars
-        or encrypted credentials in `config/mail.rb`.
+        Mail writes to `tmp/mail` in development. Read it at `/hac/mail`, which
+        is local-only and unavailable in production. Configure SMTP with env
+        vars or encrypted credentials in `config/mail.rb`.
 
         Background jobs are configured in `config/jobs.rb`. Development uses
         the async in-process adapter, tests run inline, and production persists
