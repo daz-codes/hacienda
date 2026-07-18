@@ -55,14 +55,14 @@ unless they are explicitly described as experimental.
   - [x] Run `luna new`, migrate, boot, and execute the generated test suite from that installed gem
   - [x] Verify the `luna` executable from the packed gem
   - [x] Make generator failures leave no partial application behind and report an actionable error
-- [ ] **[1.0] Green, isolated, repeatable verification**
+- [x] **[1.0] Green, isolated, repeatable verification**
   - [x] Provide one aggregate command for the Ruby, JavaScript, browser, example-application, and dependency-audit suites
   - [x] Give generated and example tests a fresh temporary database so retained test files cannot preserve an obsolete schema
   - [x] Add CI for the minimum supported Ruby and the current stable Ruby on Linux
   - [x] Run SQLite integration tests, generator package smoke tests, client tests, and dependency audits in CI
   - [x] Add a PostgreSQL CI job for the migrations, persistence, transaction, and durable-queue contracts Lunula claims are database-portable
   - [x] Prevent lockfile, generated-file, database, log, and asset churn during ordinary test runs
-  - [ ] Confirm the complete GitHub Actions workflow passes from a clean checkout
+  - [x] Confirm the complete GitHub Actions workflow passes from a clean checkout
 - [ ] **[1.0] Public API and release discipline**
   - [x] Inventory and document the supported public API versus internal implementation details
   - [x] Define semantic-versioning and deprecation policies for framework APIs, generators, migrations, and durable job payloads
