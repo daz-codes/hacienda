@@ -4,7 +4,7 @@ mail_delivery = ENV.fetch(
   "LUNULA_MAIL_DELIVERY",
   Lunula.env.test? ? "test" : Lunula.env.production? ? "smtp" : "file"
 )
-mail_credentials = File.file?(File.join(APP_ROOT, "config", "credentials.yml.enc")) ? Lunula.credentials : {}
+mail_credentials = Lunula.credentials.available? ? Lunula.credentials : {}
 
 Lunula.configure_mail(
   root: APP_ROOT,

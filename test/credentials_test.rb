@@ -30,6 +30,18 @@ class CredentialsTest < Minitest::Test
     assert_equal 0o600, File.stat(@credentials.master_key_path).mode & 0o777
   end
 
+  def test_available_requires_encrypted_credentials_and_a_key
+    assert @credentials.available?
+
+    FileUtils.rm_f(@credentials.master_key_path)
+    refute @credentials.available?
+
+    ENV["LUNULA_MASTER_KEY"] = Lunula::Credentials.generate_key
+    assert @credentials.available?
+  ensure
+    ENV.delete("LUNULA_MASTER_KEY")
+  end
+
   def test_rotate_preserves_owner_only_master_key_permissions
     @credentials.rotate
 

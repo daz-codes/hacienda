@@ -85,7 +85,7 @@ module Lunula
 
     def signed_token_secret
       ENV["LUNULA_SECRET_KEY_BASE"] ||
-        (File.file?(File.join(@root.to_s, "config", "credentials.yml.enc")) && credentials.dig(:lunula, :secret_key_base)) ||
+        (@root && credentials.available? && credentials.dig(:lunula, :secret_key_base)) ||
         development_signed_token_secret
     end
 
@@ -94,7 +94,7 @@ module Lunula
     # Comma-separated in the env var, an array in credentials.
     def signed_token_old_secrets
       from_env = ENV["LUNULA_SECRET_KEY_BASE_OLD"].to_s.split(",").map(&:strip)
-      from_credentials = if File.file?(File.join(@root.to_s, "config", "credentials.yml.enc"))
+      from_credentials = if @root && credentials.available?
         Array(credentials.dig(:lunula, :old_secret_key_bases))
       else
         []
@@ -275,7 +275,7 @@ module Lunula
     private
 
     def credentials_app_url
-      return unless @root && File.file?(File.join(@root.to_s, "config", "credentials.yml.enc"))
+      return unless @root && credentials.available?
 
       credentials.dig(:lunula, :app_url)
     end

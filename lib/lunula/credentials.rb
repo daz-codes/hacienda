@@ -44,6 +44,12 @@ module Lunula
       data.dup
     end
 
+    def available?
+      File.file?(encrypted_path) && (
+        !ENV["LUNULA_MASTER_KEY"].to_s.strip.empty? || File.file?(master_key_path)
+      )
+    end
+
     def read_text
       return "{}\n" unless File.file?(encrypted_path)
 
